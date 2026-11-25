@@ -1,11 +1,11 @@
 /** Демо-данные: участница Анна с двумя неделями истории. */
 import { addDays, todayKey } from '@/lib/date';
-import { CONSENT_VERSION, defaultGoals, requestJoinSync } from './mock-server';
+import { CONSENT_VERSION, defaultGoals, demoStream } from './mock-server';
 import { AppState, Task } from './types';
 
 export function buildDemoState(): AppState {
   const today = todayKey();
-  const stream = requestJoinSync('VPNWTM');
+  const stream = demoStream();
   const goals = defaultGoals();
   goals[0].result = 'Снизить вес с 72 до 66 кг и спать по 7,5 часов';
   goals[0].criteria = [
@@ -72,6 +72,7 @@ export function buildDemoState(): AppState {
   steps[today] = 10100;
 
   return {
+    demo: true,
     consent: { version: CONSENT_VERSION, acceptedAt: new Date().toISOString(), aiTransfer: false },
     membership: { status: 'approved', stream, requestedAt: new Date().toISOString(), checks: 2 },
     profile: {

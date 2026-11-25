@@ -8,6 +8,8 @@ import { colors, font } from '@/theme';
 
 export default function ProfileScreen() {
   const { state, actions } = useApp();
+  const [logout, setLogout] = useState(false);
+  const account = state.account;
   const { profile } = state;
   const stream = state.membership.stream!;
   const [leave, setLeave] = useState(false);
@@ -19,9 +21,12 @@ export default function ProfileScreen() {
         <View style={{ width: 56, height: 56, borderRadius: 14, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 24, fontWeight: '800', color: colors.greenText }}>{initial}</Text>
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={font.h2}>{profile.name || 'Без имени'}</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{stream.name}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            {stream.name}
+            {state.demo ? ' · демо' : account ? ` · ${account.phone ?? account.email}` : ''}
+          </Text>
         </View>
       </View>
       <Card style={{ gap: 6 }}>
@@ -50,7 +55,8 @@ export default function ProfileScreen() {
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <RowLink title="Мой поток" value={stream.name} onPress={() => router.push('/my-stream')} />
       </Card>
-      <RowLink title="Выйти из потока" color={colors.red} onPress={() => setLeave(true)} />
+      <RowLink title={state.demo ? 'Выйти из демо' : 'Выйти из аккаунта'} color={colors.blue} onPress={() => setLogout(true)} />
+      {!state.demo ? <RowLink title="Выйти из потока" color={colors.red} onPress={() => setLeave(true)} /> : null}
       <RowLink title="Удалить аккаунт" color={colors.red} onPress={() => router.push('/delete-account')} />
       <ConfirmDialog
         visible={leave}
@@ -58,9 +64,21 @@ export default function ProfileScreen() {
         message="Вы перестанете видеть задачи и цели этого потока. Вступить в другой поток можно сразу после выхода."
         confirmLabel="Выйти"
         onCancel={() => setLeave(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
           setLeave(false);
-          actions.leaveStream();
+          await actions.leaveStream();
+          router.replace('/');
+        }}
+      />
+      <ConfirmDialog
+        visible={logout}
+        title={state.demo ? 'Выйти из демо?' : 'Выйти из аккаунта?'}
+        message={state.demo ? 'Демо-данные удалятся с телефона.' : 'Данные останутся на сервере — войти можно снова по номеру или почте.'}
+        confirmLabel="Выйти"
+        onCancel={() => setLogout(false)}
+        onConfirm={async () => {
+          setLogout(false);
+          await actions.logout();
           router.replace('/');
         }}
       />

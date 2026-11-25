@@ -1,20 +1,15 @@
-/**
- * Имитация сервера на этапе 1. Позже эти функции заменятся
- * HTTP-запросами к бэкенду с теми же сигнатурами.
- */
+/** Данные для демо-режима (без сервера). */
 import { addDays, todayKey } from '@/lib/date';
-import { Goal, MembershipStatus, Stream } from './types';
 import { goalPalette } from '@/theme';
+import { Goal, Stream } from './types';
 
 export const CONSENT_VERSION = '2026-11-01';
 
-const delay = (ms = 350) => new Promise((r) => setTimeout(r, ms));
-
-function makeStream(name: string, code: string): Stream {
+export function demoStream(): Stream {
   return {
-    id: code.toLowerCase(),
-    name,
-    code,
+    id: 'demo',
+    name: 'Поток «Весна»',
+    code: 'VPNWTM',
     moderator: 'Марина Ковалёва',
     startDate: addDays(todayKey(), -14),
     durationDays: 90,
@@ -26,28 +21,6 @@ function makeStream(name: string, code: string): Stream {
     ],
     modules: { statements: true, steps: true, analyses: true, goals: true, ai: false },
   };
-}
-
-const STREAMS: Record<string, { stream: Stream; outcome: MembershipStatus }> = {
-  VPNWTM: { stream: makeStream('Поток «Весна»', 'VPNWTM'), outcome: 'approved' },
-  OTKAZZ: { stream: makeStream('Поток «Осень»', 'OTKAZZ'), outcome: 'rejected' },
-};
-
-export type JoinResult = { ok: true; stream: Stream } | { ok: false; error: string };
-
-export async function requestJoin(code: string): Promise<JoinResult> {
-  await delay();
-  const entry = STREAMS[code.toUpperCase()];
-  if (!entry) return { ok: false, error: 'Такого кода нет. Проверьте буквы или спросите код у модератора' };
-  return { ok: true, stream: entry.stream };
-}
-
-/** Модератор «решает» заявку со второй проверки статуса. */
-export async function checkStatus(code: string, checks: number): Promise<MembershipStatus> {
-  await delay();
-  const entry = STREAMS[code.toUpperCase()];
-  if (!entry) return 'rejected';
-  return checks >= 1 ? entry.outcome : 'pending';
 }
 
 export function defaultGoals(): Goal[] {
@@ -67,9 +40,4 @@ export function defaultGoals(): Goal[] {
     custom: false,
     splitWeekly: false,
   }));
-}
-
-/** Для демо-режима: поток без задержки. */
-export function requestJoinSync(code: string): Stream {
-  return STREAMS[code].stream;
 }

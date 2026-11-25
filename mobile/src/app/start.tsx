@@ -13,14 +13,22 @@ const STEPS = [
 ];
 
 export default function StartScreen() {
-  const { actions } = useApp();
+  const { actions, loggedIn } = useApp();
   return (
     <Screen
       scroll={false}
       footer={
         <>
-          <Button title="Вступить по коду" onPress={() => router.push('/join')} />
+          <Button
+            title="Вступить по коду"
+            onPress={() => router.push(loggedIn ? '/join' : { pathname: '/login', params: { next: 'join' } })}
+          />
           <Small style={{ textAlign: 'center', fontSize: 12 }}>Код или ссылку даёт модератор потока</Small>
+          {!loggedIn ? (
+            <View style={{ alignItems: 'center', marginTop: 4 }}>
+              <LinkButton title="Уже есть аккаунт — войти" color={colors.blue} onPress={() => router.push('/login')} />
+            </View>
+          ) : null}
           <View style={{ alignItems: 'center', marginTop: 4 }}>
             <LinkButton
               title="Посмотреть демо с примерами данных"

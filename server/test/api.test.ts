@@ -81,6 +81,17 @@ describe('Кактус API', () => {
     assert.equal(reuse.status, 400, 'код одноразовый');
   });
 
+  it('браузерная версия может отправлять PUT и DELETE (CORS)', async () => {
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/me/steps/2026-01-01',
+      headers: { origin: 'http://localhost:8081', 'access-control-request-method': 'PUT' },
+    });
+    assert.equal(res.statusCode, 204);
+    assert.match(String(res.headers['access-control-allow-methods']), /PUT/);
+    assert.match(String(res.headers['access-control-allow-methods']), /DELETE/);
+  });
+
   it('неверный номер и почта отклоняются', async () => {
     assert.equal((await call('POST', '/v1/auth/request-code', undefined, { channel: 'sms', target: '123' })).status, 400);
     assert.equal((await call('POST', '/v1/auth/request-code', undefined, { channel: 'email', target: 'not-an-email' })).status, 400);

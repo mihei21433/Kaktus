@@ -49,9 +49,8 @@ export default function DeleteAccount() {
         title="Удалить аккаунт навсегда"
         variant="danger"
         disabled={!ok}
-        onPress={() => {
-          actions.deleteAccount();
-          router.replace('/');
+        onPress={async () => {
+          if (await actions.deleteAccount()) router.replace('/');
         }}
       />
     </Screen>

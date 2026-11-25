@@ -51,10 +51,10 @@ export default function PendingScreen() {
         cancelLabel="Остаться"
         confirmLabel="Отозвать"
         onCancel={() => setConfirm(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
           setConfirm(false);
-          actions.cancelRequest();
-          router.replace('/join');
+          await actions.cancelRequest();
+          router.replace('/');
         }}
       />
     </Screen>

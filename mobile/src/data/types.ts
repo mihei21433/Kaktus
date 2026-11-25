@@ -82,7 +82,12 @@ export type Task = {
 
 export type Statement = { text: string; sentAt: string; kind: 'text' | 'voice' };
 
+export type Account = { phone: string | null; email: string | null; isModerator: boolean };
+
 export type AppState = {
+  /** Демо-режим: всё хранится только на телефоне, сервер не используется. */
+  demo?: boolean;
+  account?: Account;
   consent: Consent | null;
   membership: Membership;
   profile: Profile;

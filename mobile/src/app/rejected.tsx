@@ -15,8 +15,8 @@ export default function RejectedScreen() {
       footer={
         <Button
           title="Ввести другой код"
-          onPress={() => {
-            actions.cancelRequest();
+          onPress={async () => {
+            await actions.cancelRequest();
             router.replace('/join');
           }}
         />
