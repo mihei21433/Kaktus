@@ -5,12 +5,20 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.vectorfamily.kz" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.vectorfamily.kz"
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.vectorfamily.kz" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.vectorfamily.kz"
+      },
+      "channel": "production"
     }
   },
   "submit": {

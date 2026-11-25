@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 
 import { LoadState } from '@/components/mod-ui';
 import { Overview, useQuery } from '@/data/mod';
+import { AppVersionRow } from '@/components/app-updates';
 import { useApp } from '@/data/store';
 import { Caption, Card, ConfirmDialog, Header, RowLink, Screen, Small } from '@/ui';
 import { colors, font } from '@/theme';
@@ -35,6 +36,9 @@ export default function ModSettingsScreen() {
       <Small style={{ fontSize: 12 }}>
         Позже здесь появятся: команда модераторов, физнормативы, сроки целей и панель анализов.
       </Small>
+      <Card style={{ paddingVertical: 0 }}>
+        <AppVersionRow />
+      </Card>
       <RowLink title="Выйти из аккаунта" color={colors.red} onPress={() => setLogout(true)} />
       <ConfirmDialog
         visible={logout}

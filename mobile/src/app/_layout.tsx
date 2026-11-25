@@ -2,6 +2,7 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View } from 'react-native';
 
+import { UpdateBanner } from '@/components/app-updates';
 import { ErrorBanner } from '@/components/error-banner';
 import { AppProvider, useApp } from '@/data/store';
 import { colors } from '@/theme';
@@ -24,6 +25,7 @@ function Root() {
     <>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
       <ErrorBanner />
+      <UpdateBanner />
     </>
   );
 }

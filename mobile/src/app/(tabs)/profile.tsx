@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { AppVersionRow } from '@/components/app-updates';
 import { useApp } from '@/data/store';
 import { Caption, Card, ConfirmDialog, Header, RowLink, Screen } from '@/ui';
 import { colors, font } from '@/theme';
@@ -48,6 +49,8 @@ export default function ProfileScreen() {
         <RowLink title="Экспорт моих данных" value="скоро" />
       </Card>
       <Card style={{ paddingVertical: 0 }}>
+        <AppVersionRow />
+        <View style={{ height: 1, backgroundColor: colors.border }} />
         <RowLink title="Журнал доступа к моим данным" subtitle="когда модератор открывал данные о здоровье" onPress={() => router.push('/access-log')} />
       </Card>
       <Card style={{ paddingVertical: 0 }}>

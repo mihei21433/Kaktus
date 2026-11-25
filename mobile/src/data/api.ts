@@ -7,12 +7,19 @@ import Constants from 'expo-constants';
 
 import { loadSession, saveSession, Session } from './session';
 
+/** Боевой сервер. Обновления «по воздуху» не получают переменных сборки, поэтому адрес записан здесь. */
+const PROD_API_URL = 'https://api.vectorfamily.kz';
+
 function resolveBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL;
   if (fromEnv) return fromEnv.replace(/\/$/, '');
-  const host = Constants.expoConfig?.hostUri?.split(':')[0];
-  if (host && !host.endsWith('exp.direct')) return `http://${host}:3000`;
-  return 'http://localhost:3000';
+  if (__DEV__) {
+    // Разработка: сервер на том же компьютере, откуда Expo загрузил приложение
+    const host = Constants.expoConfig?.hostUri?.split(':')[0];
+    if (host && !host.endsWith('exp.direct')) return `http://${host}:3000`;
+    return 'http://localhost:3000';
+  }
+  return PROD_API_URL;
 }
 
 export const API_URL = resolveBaseUrl();
