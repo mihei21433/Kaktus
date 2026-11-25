@@ -278,6 +278,7 @@ type Ctx = {
   loggedIn: boolean;
   error: string | null;
   clearError: () => void;
+  showError: (message: string) => void;
 };
 const AppContext = createContext<Ctx | null>(null);
 
@@ -335,9 +336,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [actions]);
 
   const clearError = useCallback(() => setError(null), []);
+  const showError = useCallback((m: string) => setError(m), []);
   const value = useMemo(
-    () => ({ state, actions, hydrated, loggedIn, error, clearError }),
-    [state, actions, hydrated, loggedIn, error, clearError],
+    () => ({ state, actions, hydrated, loggedIn, error, clearError, showError }),
+    [state, actions, hydrated, loggedIn, error, clearError, showError],
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

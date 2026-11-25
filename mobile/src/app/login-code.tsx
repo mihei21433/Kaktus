@@ -31,7 +31,7 @@ export default function LoginCodeScreen() {
       const s = await actions.verifyCode(p.channel, p.target, value);
       // Экраны входа больше не нужны — «Назад» не должен на них возвращать
       if (router.canDismiss()) router.dismissAll();
-      if (s.membership.status === 'none' && p.next === 'join') router.replace('/join');
+      if (s.membership.status === 'none' && p.next === 'join' && !s.account?.isModerator) router.replace('/join');
       else router.replace('/');
     } catch (e) {
       setError((e as Error).message);

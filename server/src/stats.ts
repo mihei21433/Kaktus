@@ -110,7 +110,8 @@ export async function memberStats(
 
     let label: MemberLabel;
     const silence = lastActive ? diff(today, lastActive) : dayInStream;
-    if (!lastActive && dayInStream <= 2) label = 'new';
+    // Первый день не оцениваем: он ещё не закончился
+    if (dayInStream === 1 || (!lastActive && dayInStream <= 2)) label = 'new';
     else if (silence >= RULES.silentDays) label = 'no_reports';
     else if ((taskRate ?? 0) >= RULES.onPlanRate && silence < RULES.activeWithinDays) label = 'on_plan';
     else label = 'behind';

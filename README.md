@@ -33,8 +33,9 @@ cd server && npx tsc --noEmit && npm test
 токены; `POST /v1/auth/refresh`.
 Участник: `GET /v1/me/state` (всё состояние), заявка `POST /v1/me/join`, данные —
 `/v1/me/tasks`, `/statements`, `/steps`, `/fitness`, `/goals`, `/interim`.
-Модератор: `/v1/mod/streams`, `/v1/mod/streams/:id/memberships`,
-`POST /v1/mod/memberships/:id/approve|reject|block|unblock`.
+Модератор: `/v1/mod/overview`, `/v1/mod/requests`, `/v1/mod/streams/:id/members`,
+`/v1/mod/members/:id` (досье), `POST /v1/mod/members/:id/tasks`, `/v1/mod/streams/:id/broadcasts`,
+`PATCH /v1/mod/streams/:id`, `POST /v1/mod/memberships/:id/approve|reject|block|unblock`.
 
 ## Этапы
 
@@ -43,5 +44,6 @@ cd server && npx tsc --noEmit && npm test
    по заявке, Docker и инструкция по развёртыванию.
    Осталось: регистрация телефона для пушей — вместе со сборкой через EAS.
 3. Анализы: загрузка бланков, 46 показателей, индекс здоровья, экспорт.
-4. Кабинет модератора в приложении.
+4. ✅ Кабинет модератора: потоки, заявки, участники со статусами, досье, задача участнику,
+   рассылка, настройки потока. Позже: команда модераторов, расписания, физнормативы, сроки целей.
 5. ИИ: распознавание бланков и шагов, сводки и рекомендации.

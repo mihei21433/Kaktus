@@ -77,6 +77,8 @@ export type Task = {
   minValue?: number;
   unit?: string;
   fromModerator?: boolean;
+  /** Комментарий модератора к задаче */
+  comment?: string;
   completions: Record<string, boolean>;
 };
 

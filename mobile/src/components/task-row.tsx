@@ -31,6 +31,7 @@ export function TaskRow({
       <View style={{ flex: 1, gap: 4 }}>
         {showGoal && goal ? <Tag label={goal.title} color={goal.color} /> : null}
         <Text style={[styles.text, done && styles.done]}>{task.text}</Text>
+        {task.comment ? <Text style={styles.comment}>Модератор: {task.comment}</Text> : null}
       </View>
       {task.minValue ? (
         <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
@@ -55,4 +56,5 @@ const styles = StyleSheet.create({
   },
   text: { color: colors.text, fontSize: 15 },
   done: { color: colors.textMuted, textDecorationLine: 'line-through' },
+  comment: { color: colors.blue, fontSize: 12 },
 });

@@ -4,9 +4,10 @@ import { useApp } from '@/data/store';
 
 /** Точка входа: отправляет на нужный шаг онбординга или в приложение. */
 export default function Index() {
-  const { state } = useApp();
+  const { state, loggedIn } = useApp();
   const { consent, membership, profile } = state;
   if (!consent) return <Redirect href="/consent" />;
+  if (loggedIn && state.account?.isModerator) return <Redirect href="/streams" />;
   switch (membership.status) {
     case 'none':
       return <Redirect href="/start" />;

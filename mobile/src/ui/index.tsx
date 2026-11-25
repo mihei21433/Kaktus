@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: space.lg,
   },
-  buttonSmall: { height: 40 },
+  buttonSmall: { height: 40, paddingHorizontal: 8 },
   buttonText: { fontSize: 16, fontWeight: '700' },
   chip: {
     paddingHorizontal: 12,
