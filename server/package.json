@@ -1,0 +1,34 @@
+{
+  "name": "kaktus-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "admin": "tsx src/admin.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.6.0",
+    "@fastify/cors": "^11.4.3",
+    "@fastify/rate-limit": "^11.3.0",
+    "fastify": "^5.12.8",
+    "jose": "^6.2.18",
+    "nodemailer": "^10.6.1",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.7",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  }
+}
