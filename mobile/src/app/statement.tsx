@@ -32,7 +32,7 @@ export default function StatementScreen() {
   return (
     <Screen header={<Header title="Утреннее заявление" onBack={() => router.back()} />}>
       <Small>Проговорите настрой и планы на день. Формат и длительность задаёт модератор.</Small>
-      <Small style={{ fontSize: 12 }}>Голосом, до 2 мин · Ежедневно, в любое время</Small>
+      <Small style={{ fontSize: 12 }}>Голосом или текстом · Ежедневно, в любое время</Small>
 
       {sent ? (
         <Card style={{ gap: 10 }}>
@@ -80,6 +80,7 @@ export default function StatementScreen() {
                 <Text style={font.title}>Запись готова · {mmss(take.sec)}</Text>
                 <VoicePlayer localUri={take.uri} durationSec={take.sec} />
                 <Button title={sending ? 'Отправляем…' : 'Отправить заявление'} disabled={sending} onPress={sendVoice} />
+                {sending && take.sec > 300 ? <Small style={{ fontSize: 12, textAlign: 'center' }}>Длинная запись — отправка может занять минуту-другую. Не закрывайте экран.</Small> : null}
                 <Button title="Записать заново" variant="secondary" disabled={sending} onPress={() => setTake(null)} />
               </Card>
             ) : (

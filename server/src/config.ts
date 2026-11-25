@@ -26,6 +26,8 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}) {
     databaseUrl: get('DATABASE_URL'),
     dataDir: get('DATA_DIR') ?? path.resolve('data'),
     /** Голосовые заявления и другие файлы участников */
+    /** Технический предел одного голосового файла (защита диска от забытой записи), МБ */
+    voiceMaxBytes: Number(get('VOICE_MAX_MB') ?? 300) * 1024 * 1024,
     uploadDir: get('UPLOAD_DIR') ?? path.join(get('DATA_DIR') ?? path.resolve('data'), 'uploads'),
     jwtSecret,
     accessTtlSec: 15 * 60,

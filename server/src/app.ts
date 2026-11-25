@@ -35,7 +35,8 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
   };
 
   // Аудио приходит «как есть» (тело запроса = файл)
-  app.addContentTypeParser(/^audio\//, { parseAs: 'buffer', bodyLimit: 8 * 1024 * 1024 }, (_req, body, done) => done(null, body));
+  // Аудио не читаем в память: маршрут сам пишет поток на диск (запись может быть часовой)
+  app.addContentTypeParser(/^audio\//, (_req, payload, done) => done(null, payload));
   // Бланки анализов: фото и PDF
   app.addContentTypeParser(/^(image\/|application\/pdf)/, { parseAs: 'buffer', bodyLimit: 15 * 1024 * 1024 }, (_req, body, done) => done(null, body));
 

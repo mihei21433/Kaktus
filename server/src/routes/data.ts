@@ -1,4 +1,6 @@
 /** Ежедневные данные участника. Идентификаторы новых записей присылает приложение (UUID) — повтор запроса безопасен. */
+import type { Readable } from 'node:stream';
+
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -26,7 +28,7 @@ async function ownGoal(q: Queryable, membershipId: string, goalId: string) {
   return g;
 }
 
-export async function dataRoutes(app: FastifyInstance, { db, files, auth }: Deps) {
+export async function dataRoutes(app: FastifyInstance, { db, files, auth, cfg }: Deps) {
   /* --- Задачи --- */
   app.post('/me/tasks', async (req) => {
     const b = parse(
@@ -95,20 +97,34 @@ export async function dataRoutes(app: FastifyInstance, { db, files, auth }: Deps
     return { ok: true };
   });
 
-  /** Голосовое заявление: тело запроса — аудиофайл, длительность в ?duration= (секунды). */
-  app.put('/me/statements/:date/voice', { bodyLimit: 8 * 1024 * 1024 }, async (req) => {
+  /**
+   * Голосовое заявление: тело запроса — аудиофайл любой длины, длительность в ?duration= (секунды).
+   * Ограничения для человека нет; технический предел размера — cfg.voiceMaxBytes.
+   */
+  app.put('/me/statements/:date/voice', async (req) => {
     const { date } = parse(z.object({ date: zDate }), req.params);
-    const { duration } = parse(z.object({ duration: z.coerce.number().int().min(1).max(130) }), req.query);
+    const { duration } = parse(z.object({ duration: z.coerce.number().int().min(1).max(24 * 3600) }), req.query);
     const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
     const ext = AUDIO_TYPES[type];
     if (!ext) throw new ApiError(415, 'bad_audio', 'Неподдерживаемый формат записи');
-    const body = req.body as Buffer;
-    if (!Buffer.isBuffer(body) || body.length < 100) throw badRequest('empty_audio', 'Запись пустая — попробуйте ещё раз');
     const { membership, stream } = await requireMember(db, req.userId);
     if (!(stream.modules as { statements?: boolean }).statements) throw forbidden('Раздел выключен модератором');
     checkDate(date, stream.timezone, 0, 0);
+    let saved: { rel: string; bytes: number };
+    try {
+      saved = await files.saveVoiceStream(membership.id, date, ext, req.body as Readable, cfg.voiceMaxBytes);
+    } catch (e) {
+      if ((e as { code?: string }).code === 'TOO_LARGE') {
+        throw new ApiError(413, 'audio_too_large', `Запись слишком большая (больше ${Math.round(cfg.voiceMaxBytes / 1048576)} МБ)`);
+      }
+      throw e;
+    }
+    if (saved.bytes < 100) {
+      await files.remove(saved.rel);
+      throw badRequest('empty_audio', 'Запись пустая — попробуйте ещё раз');
+    }
+    const rel = saved.rel;
     const [old] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [membership.id, date]);
-    const rel = await files.saveVoice(membership.id, date, ext, body);
     await db.query(
       `insert into statements (membership_id, date, text, kind, audio_path, duration_sec) values ($1, $2, '', 'voice', $3, $4)
        on conflict (membership_id, date) do update

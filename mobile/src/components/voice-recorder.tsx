@@ -4,14 +4,20 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { MAX_VOICE_SEC, mmss, VOICE_PRESET } from '@/lib/audio';
+import { mmss, VOICE_PRESET } from '@/lib/audio';
 import { Small } from '@/ui';
 import { colors } from '@/theme';
 
-/** Большая кнопка записи: нажали — пишем, нажали ещё раз — готово. Через 2 минуты останавливается сама. */
+/**
+ * Большая кнопка записи: нажали — пишем, нажали ещё раз — готово. Длительность не ограничена.
+ * Пока идёт запись, экран не гаснет: блокировка телефона прервала бы запись.
+ */
+const KEEP_AWAKE_TAG = 'voice-recording';
+
 export function VoiceRecorder({ onRecorded }: { onRecorded: (uri: string, durationSec: number) => void }) {
   const recorder = useAudioRecorder(VOICE_PRESET);
   const state = useAudioRecorderState(recorder, 250);
@@ -31,6 +37,7 @@ export function VoiceRecorder({ onRecorded }: { onRecorded: (uri: string, durati
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
+      await activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -42,19 +49,17 @@ export function VoiceRecorder({ onRecorded }: { onRecorded: (uri: string, durati
     const sec = Math.max(1, Math.round(state.durationMillis / 1000));
     try {
       await recorder.stop();
+      await deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
       // Возвращаем звук в динамик для прослушивания
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      if (recorder.uri) onRecorded(recorder.uri, Math.min(sec, MAX_VOICE_SEC));
+      if (recorder.uri) onRecorded(recorder.uri, sec);
     } finally {
       stopping.current = false;
     }
   };
 
-  useEffect(() => {
-    if (state.isRecording && state.durationMillis >= MAX_VOICE_SEC * 1000) void stop();
-    // stop зависит только от текущего состояния записи
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.isRecording, state.durationMillis]);
+  // Ушли с экрана посреди записи — отпускаем экран
+  useEffect(() => () => void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {}), []);
 
   const recording = state.isRecording;
   return (
@@ -83,9 +88,9 @@ export function VoiceRecorder({ onRecorded }: { onRecorded: (uri: string, durati
         />
       </Pressable>
       <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
-        {recording ? `${mmss(state.durationMillis / 1000)} / ${mmss(MAX_VOICE_SEC)}` : 'Нажмите и говорите'}
+        {recording ? mmss(state.durationMillis / 1000) : 'Нажмите и говорите'}
       </Text>
-      <Small style={{ fontSize: 12 }}>{recording ? 'Нажмите ещё раз, чтобы закончить' : 'До 2 минут'}</Small>
+      <Small style={{ fontSize: 12 }}>{recording ? 'Нажмите ещё раз, чтобы закончить' : 'Говорите сколько нужно'}</Small>
       {denied ? (
         <Text style={{ color: colors.red, fontSize: 13, textAlign: 'center' }}>
           Нет доступа к микрофону. Разрешите его для «Кактуса» в настройках телефона или напишите заявление текстом.
