@@ -50,7 +50,7 @@ const PUSH_TEXT: Partial<Record<Decision, [string, string]>> = {
   reject: ['Заявка отклонена', 'Модератор отклонил заявку. Откройте приложение, чтобы ввести другой код.'],
 };
 
-export async function moderatorRoutes(app: FastifyInstance, { db, push }: Deps) {
+export async function moderatorRoutes(app: FastifyInstance, { db, push, files, auth }: Deps) {
   app.post('/mod/streams', async (req) => {
     await requireModerator(db, req.userId);
     const b = parse(
@@ -271,6 +271,25 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push }: Deps) 
         progress: Number(i.progress),
       })),
     };
+  });
+
+  app.get('/mod/members/:id/statements/:date/audio-link', async (req) => {
+    await requireModerator(db, req.userId);
+    const p = parse(z.object({ id: zId, date: zDate }), req.params);
+    const { m } = await memberAccess(req.userId, p.id);
+    const [s] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [m.id, p.date]);
+    if (!s?.audio_path) throw notFound('Записи нет');
+    return { url: `/v1/audio/${await auth.audioToken(m.id, p.date)}` };
+  });
+
+  app.get('/mod/members/:id/statements/:date/audio', async (req, reply) => {
+    await requireModerator(db, req.userId);
+    const p = parse(z.object({ id: zId, date: zDate }), req.params);
+    const { m } = await memberAccess(req.userId, p.id);
+    const [s] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [m.id, p.date]);
+    if (!s?.audio_path || !(await files.exists(s.audio_path))) throw notFound('Записи нет');
+    const f = files.open(s.audio_path);
+    return reply.header('Content-Type', f.type).header('Cache-Control', 'private, no-store').send(f.stream);
   });
 
   app.post('/mod/members/:id/tasks', async (req) => {

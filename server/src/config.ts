@@ -25,6 +25,8 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}) {
     host: get('HOST') ?? '0.0.0.0',
     databaseUrl: get('DATABASE_URL'),
     dataDir: get('DATA_DIR') ?? path.resolve('data'),
+    /** Голосовые заявления и другие файлы участников */
+    uploadDir: get('UPLOAD_DIR') ?? path.join(get('DATA_DIR') ?? path.resolve('data'), 'uploads'),
     jwtSecret,
     accessTtlSec: 15 * 60,
     refreshTtlDays: 60,

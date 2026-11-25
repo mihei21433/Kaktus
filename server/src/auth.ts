@@ -98,6 +98,24 @@ export class AuthService {
     }
   }
 
+  /** Подписанная ссылка на аудио: действует 10 минут, открывается без заголовка авторизации (нужно плееру). */
+  async audioToken(membershipId: string, date: string): Promise<string> {
+    return new SignJWT({ m: membershipId, d: date })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setAudience('audio')
+      .setExpirationTime('10m')
+      .sign(this.key);
+  }
+
+  async verifyAudioToken(token: string): Promise<{ membershipId: string; date: string }> {
+    try {
+      const { payload } = await jwtVerify(token, this.key, { algorithms: ['HS256'], audience: 'audio' });
+      return { membershipId: String(payload.m), date: String(payload.d) };
+    } catch {
+      throw new ApiError(403, 'link_expired', 'Ссылка на запись устарела');
+    }
+  }
+
   private async issue(q: Queryable, userId: string): Promise<Tokens> {
     const accessToken = await new SignJWT({})
       .setProtectedHeader({ alg: 'HS256' })

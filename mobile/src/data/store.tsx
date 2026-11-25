@@ -216,6 +216,24 @@ function useActions({ setState, get, setError, setLoggedIn }: Env) {
         }));
         sync(() => api.api('PUT', `/v1/me/statements/${date}`, { text }));
       },
+      /** Голосовое заявление: файл с телефона уходит на сервер (в демо — остаётся на телефоне). */
+      async sendVoice(uri: string, durationSec: number, mimeType: string): Promise<boolean> {
+        const date = todayKey();
+        const sentAt = new Date().toISOString();
+        if (!online()) {
+          setState((s) => ({ ...s, statements: { ...s.statements, [date]: { text: '', kind: 'voice', sentAt, durationSec, localUri: uri } } }));
+          return true;
+        }
+        try {
+          const blob = await (await fetch(uri)).blob();
+          await api.upload(`/v1/me/statements/${date}/voice?duration=${durationSec}`, blob, mimeType);
+          setState((s) => ({ ...s, statements: { ...s.statements, [date]: { text: '', kind: 'voice', sentAt, durationSec } } }));
+          return true;
+        } catch (e) {
+          setError(e instanceof api.ApiError ? e.message : 'Не удалось отправить запись');
+          return false;
+        }
+      },
       clearStatement() {
         const date = todayKey();
         setState((s) => {

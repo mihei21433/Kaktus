@@ -42,7 +42,7 @@ export type DayView = {
   date: string;
   tasks: { id: string; text: string; done: boolean; fromModerator: boolean; doneAt?: string }[];
   steps: number | null;
-  statement: { text: string; sentAt: string } | null;
+  statement: { text: string; sentAt: string; kind: 'text' | 'voice'; durationSec: number | null } | null;
 };
 
 export type Dossier = {

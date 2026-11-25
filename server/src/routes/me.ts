@@ -99,11 +99,11 @@ export async function buildState(q: Queryable, userId: string) {
     completions: byTask.get(t.id) ?? {},
   }));
 
-  for (const s of await q.query<{ date: string; text: string; kind: string; sent_at: Date }>(
-    'select date::text as date, text, kind, sent_at from statements where membership_id = $1',
+  for (const s of await q.query<{ date: string; text: string; kind: string; sent_at: Date; duration_sec: number | null }>(
+    'select date::text as date, text, kind, sent_at, duration_sec from statements where membership_id = $1',
     [mid],
   )) {
-    state.statements[s.date] = { text: s.text, kind: s.kind, sentAt: s.sent_at };
+    state.statements[s.date] = { text: s.text, kind: s.kind, sentAt: s.sent_at, durationSec: s.duration_sec ?? undefined };
   }
   for (const s of await q.query<{ date: string; count: number }>('select date::text as date, count from steps where membership_id = $1', [mid])) {
     state.steps[s.date] = s.count;
@@ -117,7 +117,7 @@ export async function buildState(q: Queryable, userId: string) {
   return state;
 }
 
-export async function meRoutes(app: FastifyInstance, { db }: Deps) {
+export async function meRoutes(app: FastifyInstance, { db, files }: Deps) {
   app.get('/me/state', async (req) => buildState(db, req.userId));
 
   /* --- Согласие --- */
@@ -202,7 +202,10 @@ export async function meRoutes(app: FastifyInstance, { db }: Deps) {
   app.delete('/me', async (req) => {
     const [owns] = await db.query('select 1 from streams where owner_id = $1 limit 1', [req.userId]);
     if (owns) throw new ApiError(409, 'owns_streams', 'Сначала передайте свои потоки другому модератору');
+    // Файлы (голосовые) удаляем вместе с аккаунтом
+    const ms = await db.query<{ id: string }>('select id from memberships where user_id = $1', [req.userId]);
     await db.query('delete from users where id = $1', [req.userId]);
+    for (const m of ms) await files.removeMembership(m.id);
     return { ok: true };
   });
 

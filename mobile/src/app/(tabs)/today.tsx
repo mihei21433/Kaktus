@@ -60,7 +60,7 @@ export default function TodayScreen() {
           <Stat
             label="Заявление"
             value={statement ? 'Отправлено' : 'Не отправлено'}
-            sub={statement ? `текст · в ${formatTime(statement.sentAt)}` : 'текстом · ежедневно, в любое время'}
+            sub={statement ? `${statement.kind === 'voice' ? 'голос' : 'текст'} · в ${formatTime(statement.sentAt)}` : 'голосом, до 2 мин · в любое время'}
             onPress={() => router.push('/statement')}
           />
         ) : null}

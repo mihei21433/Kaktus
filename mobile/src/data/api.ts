@@ -96,6 +96,40 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   }
 }
 
+/** Действующий токен доступа: обновляет его заранее, если до конца меньше минуты (нужно плееру аудио). */
+export async function freshAccessToken(): Promise<string | null> {
+  if (!session) return null;
+  try {
+    const payload = JSON.parse(atob(session.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (typeof payload.exp === 'number' && payload.exp * 1000 - Date.now() < 60_000) await tryRefresh();
+  } catch {
+    // токен нечитаем — сервер всё равно проверит и попросит войти заново
+  }
+  return session?.accessToken ?? null;
+}
+
+/** Загрузка файла «как есть» (аудио). */
+export async function upload<T = unknown>(path: string, body: Blob, contentType: string): Promise<T> {
+  const send = async () => {
+    const token = await freshAccessToken();
+    let res: Response;
+    try {
+      res = await fetch(API_URL + path, { method: 'PUT', headers: { 'Content-Type': contentType, Authorization: `Bearer ${token}` }, body });
+    } catch {
+      throw new ApiError(0, 'network', 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз');
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, json.error ?? 'error', json.message ?? 'Ошибка сервера');
+    return json as T;
+  };
+  try {
+    return await send();
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401 && (await tryRefresh())) return send();
+    throw e;
+  }
+}
+
 /* --- Вход --- */
 
 export type Channel = 'sms' | 'email';

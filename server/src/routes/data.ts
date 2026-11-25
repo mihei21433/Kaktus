@@ -4,7 +4,8 @@ import { z } from 'zod';
 
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
-import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { AUDIO_TYPES } from '../files.js';
+import { ApiError, badRequest, forbidden, notFound } from '../lib/errors.js';
 import { addDays, todayIn } from '../lib/time.js';
 import { parse, zDate, zId, zText } from '../lib/validate.js';
 import { requireMember } from '../membership.js';
@@ -25,7 +26,7 @@ async function ownGoal(q: Queryable, membershipId: string, goalId: string) {
   return g;
 }
 
-export async function dataRoutes(app: FastifyInstance, { db }: Deps) {
+export async function dataRoutes(app: FastifyInstance, { db, files, auth }: Deps) {
   /* --- Задачи --- */
   app.post('/me/tasks', async (req) => {
     const b = parse(
@@ -83,19 +84,67 @@ export async function dataRoutes(app: FastifyInstance, { db }: Deps) {
     const { membership, stream } = await requireMember(db, req.userId);
     if (!stream.modules || !(stream.modules as { statements?: boolean }).statements) throw forbidden('Раздел выключен модератором');
     checkDate(date, stream.timezone, 0, 0);
+    const [old] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [membership.id, date]);
     await db.query(
-      `insert into statements (membership_id, date, text) values ($1, $2, $3)
-       on conflict (membership_id, date) do update set text = excluded.text, sent_at = now()`,
+      `insert into statements (membership_id, date, text, kind) values ($1, $2, $3, 'text')
+       on conflict (membership_id, date) do update
+         set text = excluded.text, kind = 'text', audio_path = null, duration_sec = null, sent_at = now()`,
       [membership.id, date, b.text],
     );
+    await files.remove(old?.audio_path);
     return { ok: true };
+  });
+
+  /** Голосовое заявление: тело запроса — аудиофайл, длительность в ?duration= (секунды). */
+  app.put('/me/statements/:date/voice', { bodyLimit: 8 * 1024 * 1024 }, async (req) => {
+    const { date } = parse(z.object({ date: zDate }), req.params);
+    const { duration } = parse(z.object({ duration: z.coerce.number().int().min(1).max(130) }), req.query);
+    const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+    const ext = AUDIO_TYPES[type];
+    if (!ext) throw new ApiError(415, 'bad_audio', 'Неподдерживаемый формат записи');
+    const body = req.body as Buffer;
+    if (!Buffer.isBuffer(body) || body.length < 100) throw badRequest('empty_audio', 'Запись пустая — попробуйте ещё раз');
+    const { membership, stream } = await requireMember(db, req.userId);
+    if (!(stream.modules as { statements?: boolean }).statements) throw forbidden('Раздел выключен модератором');
+    checkDate(date, stream.timezone, 0, 0);
+    const [old] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [membership.id, date]);
+    const rel = await files.saveVoice(membership.id, date, ext, body);
+    await db.query(
+      `insert into statements (membership_id, date, text, kind, audio_path, duration_sec) values ($1, $2, '', 'voice', $3, $4)
+       on conflict (membership_id, date) do update
+         set text = '', kind = 'voice', audio_path = excluded.audio_path, duration_sec = excluded.duration_sec, sent_at = now()`,
+      [membership.id, date, rel, duration],
+    );
+    await files.remove(old?.audio_path);
+    return { ok: true, durationSec: duration };
+  });
+
+  app.get('/me/statements/:date/audio-link', async (req) => {
+    const { date } = parse(z.object({ date: zDate }), req.params);
+    const { membership } = await requireMember(db, req.userId);
+    const [s] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [membership.id, date]);
+    if (!s?.audio_path) throw notFound('Записи нет');
+    return { url: `/v1/audio/${await auth.audioToken(membership.id, date)}` };
+  });
+
+  app.get('/me/statements/:date/audio', async (req, reply) => {
+    const { date } = parse(z.object({ date: zDate }), req.params);
+    const { membership } = await requireMember(db, req.userId);
+    const [s] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [membership.id, date]);
+    if (!s?.audio_path || !(await files.exists(s.audio_path))) throw notFound('Записи нет');
+    const f = files.open(s.audio_path);
+    return reply.header('Content-Type', f.type).header('Cache-Control', 'private, no-store').send(f.stream);
   });
 
   app.delete('/me/statements/:date', async (req) => {
     const { date } = parse(z.object({ date: zDate }), req.params);
     const { membership, stream } = await requireMember(db, req.userId);
     checkDate(date, stream.timezone, 0, 0);
-    await db.query('delete from statements where membership_id = $1 and date = $2', [membership.id, date]);
+    const [s] = await db.query<{ audio_path: string | null }>(
+      'delete from statements where membership_id = $1 and date = $2 returning audio_path',
+      [membership.id, date],
+    );
+    await files.remove(s?.audio_path);
     return { ok: true };
   });
 

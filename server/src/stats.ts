@@ -18,7 +18,7 @@ export type DayView = {
   date: string;
   tasks: { id: string; text: string; done: boolean; fromModerator: boolean; doneAt?: string }[];
   steps: number | null;
-  statement: { text: string; sentAt: string } | null;
+  statement: { text: string; sentAt: string; kind: string; durationSec: number | null } | null;
 };
 
 export type MemberStats = {
@@ -61,8 +61,8 @@ export async function memberStats(
      where t.membership_id = any($1) and c.done and c.date >= $2`,
     [ids, from],
   );
-  const statements = await q.query<{ membership_id: string; date: string; text: string; sent_at: Date }>(
-    'select membership_id, date::text as date, text, sent_at from statements where membership_id = any($1) and date >= $2',
+  const statements = await q.query<{ membership_id: string; date: string; text: string; sent_at: Date; kind: string; duration_sec: number | null }>(
+    'select membership_id, date::text as date, text, sent_at, kind, duration_sec from statements where membership_id = any($1) and date >= $2',
     [ids, from],
   );
   const steps = await q.query<{ membership_id: string; date: string; count: number }>(
@@ -94,7 +94,7 @@ export async function memberStats(
         date,
         tasks: dayTasks,
         steps: mySteps.get(date) ?? null,
-        statement: st ? { text: st.text, sentAt: st.sent_at.toISOString?.() ?? String(st.sent_at) } : null,
+        statement: st ? { text: st.text, sentAt: st.sent_at.toISOString?.() ?? String(st.sent_at), kind: st.kind, durationSec: st.duration_sec } : null,
       });
     }
 

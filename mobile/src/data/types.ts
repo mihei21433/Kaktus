@@ -85,7 +85,14 @@ export type Task = {
   completions: Record<string, boolean>;
 };
 
-export type Statement = { text: string; sentAt: string; kind: 'text' | 'voice' };
+export type Statement = {
+  text: string;
+  sentAt: string;
+  kind: 'text' | 'voice';
+  durationSec?: number;
+  /** Только в демо-режиме: запись лежит на телефоне */
+  localUri?: string;
+};
 
 export type Account = { phone: string | null; email: string | null; isModerator: boolean };
 

@@ -6,4 +6,6 @@ set -eu
 cd "$(dirname "$0")"
 mkdir -p ../backups
 docker compose exec -T db pg_dump -U kaktus -d kaktus --format=custom > "../backups/kaktus-$(date +%F).dump"
-find ../backups -name 'kaktus-*.dump' -mtime +14 -delete
+# Голосовые заявления
+docker compose exec -T api tar czf - -C /app/uploads . > "../backups/uploads-$(date +%F).tgz"
+find ../backups \( -name 'kaktus-*.dump' -o -name 'uploads-*.tgz' \) -mtime +14 -delete

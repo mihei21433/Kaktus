@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { Avatar, LabelTag, LoadState } from '@/components/mod-ui';
+import { VoicePlayer } from '@/components/voice-player';
 import { api, ApiError } from '@/data/api';
 import { DayView, Dossier, useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
 import { HORIZONS } from '@/data/types';
+import { mmss } from '@/lib/audio';
 import { formatDayMonth, formatNumber, formatTime, plural } from '@/lib/date';
 import { Button, Caption, Card, Chip, ConfirmDialog, Header, ProgressBar, Screen, Small, Stat, Tag, ui } from '@/ui';
 import { colors, font } from '@/theme';
@@ -308,12 +310,15 @@ function StepsTab({ d }: { d: Dossier }) {
 
 function StatementsTab({ d }: { d: Dossier }) {
   const list = d.days.filter((x) => x.statement);
-  const avgLen = list.length ? Math.round(list.reduce((n, x) => n + x.statement!.text.length, 0) / list.length) : null;
+  const voice = list.filter((x) => x.statement!.kind === 'voice');
+  const texts = list.filter((x) => x.statement!.kind !== 'voice');
+  const avgLen = texts.length ? Math.round(texts.reduce((n, x) => n + x.statement!.text.length, 0) / texts.length) : null;
+  const avgSec = voice.length ? voice.reduce((n, x) => n + (x.statement!.durationSec ?? 0), 0) / voice.length : null;
   return (
     <>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Stat label="Заявлений" value={`${list.length}/${d.days.length}`} />
-        <Stat label="Средняя длина" value={avgLen === null ? '—' : `${avgLen} симв.`} />
+        <Stat label="Средняя длина" value={avgSec !== null ? mmss(avgSec) : avgLen === null ? '—' : `${avgLen} симв.`} sub={avgSec !== null ? 'голосом' : undefined} />
       </View>
       {list.length === 0 ? (
         <Card style={{ alignItems: 'center', gap: 4, paddingVertical: 16 }}>
@@ -322,12 +327,22 @@ function StatementsTab({ d }: { d: Dossier }) {
         </Card>
       ) : null}
       {list.map((x) => (
-        <Card key={x.date} style={{ gap: 6 }}>
+        <Card key={x.date} style={{ gap: 8 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={[font.title, { fontSize: 14 }]}>{formatDayMonth(x.date)}</Text>
-            <Small style={{ fontSize: 11 }}>в {formatTime(x.statement!.sentAt)}</Small>
+            <Small style={{ fontSize: 11 }}>
+              {x.statement!.kind === 'voice' ? 'голосом · ' : ''}в {formatTime(x.statement!.sentAt)}
+            </Small>
           </View>
-          <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{x.statement!.text}</Text>
+          {x.statement!.kind === 'voice' ? (
+            <VoicePlayer
+              linkPath={`/v1/mod/members/${d.member.id}/statements/${x.date}/audio-link`}
+              durationSec={x.statement!.durationSec ?? undefined}
+              accent={colors.blue}
+            />
+          ) : (
+            <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{x.statement!.text}</Text>
+          )}
         </Card>
       ))}
     </>
