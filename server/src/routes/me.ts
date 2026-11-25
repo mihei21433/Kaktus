@@ -71,8 +71,8 @@ export async function buildState(q: Queryable, userId: string) {
     )
   ).map((i) => ({ id: i.id, goalId: i.goal_id, horizon: i.horizon, text: i.text, target: num(i.target), unit: i.unit ?? undefined, progress: Number(i.progress), startDate: i.start_date }));
 
-  const tasks = await q.query<{ id: string; goal_id: string; text: string; date: string; repeat_daily: boolean; min_value: unknown; unit: string | null; from_moderator: boolean }>(
-    `select id, goal_id, text, date::text as date, repeat_daily, min_value, unit, from_moderator
+  const tasks = await q.query<{ id: string; goal_id: string; text: string; date: string; repeat_daily: boolean; min_value: unknown; unit: string | null; from_moderator: boolean; comment: string | null }>(
+    `select id, goal_id, text, date::text as date, repeat_daily, min_value, unit, from_moderator, comment
      from tasks where membership_id = $1 and deleted_at is null order by created_at`,
     [mid],
   );
@@ -95,6 +95,7 @@ export async function buildState(q: Queryable, userId: string) {
     minValue: num(t.min_value),
     unit: t.unit ?? undefined,
     fromModerator: t.from_moderator,
+    comment: t.comment ?? undefined,
     completions: byTask.get(t.id) ?? {},
   }));
 
