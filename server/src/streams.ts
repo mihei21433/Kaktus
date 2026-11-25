@@ -77,12 +77,13 @@ export type StreamRow = {
   modules: unknown;
   norms: unknown;
   reminders: unknown;
+  target_index: number;
   moderator: string;
 };
 
 export const STREAM_SELECT = `
   select s.id, s.name, s.code, s.timezone, s.start_date::text as start_date, s.duration_days, s.goal_deadline,
-         s.steps_threshold, s.require_approval, s.modules, s.norms, s.reminders, coalesce(nullif(u.name, ''), 'Модератор') as moderator
+         s.steps_threshold, s.require_approval, s.modules, s.norms, s.reminders, s.target_index, coalesce(nullif(u.name, ''), 'Модератор') as moderator
   from streams s join users u on u.id = s.owner_id`;
 
 /** Поток в формате мобильного приложения (тип Stream). */
@@ -99,6 +100,7 @@ export function streamView(s: StreamRow) {
     norms: s.norms,
     modules: s.modules,
     reminders: s.reminders,
+    targetIndex: s.target_index,
   };
 }
 

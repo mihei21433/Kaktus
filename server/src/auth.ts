@@ -107,6 +107,20 @@ export class AuthService {
       .sign(this.key);
   }
 
+  /** Подписанная ссылка на бланк анализов (10 минут). */
+  async blankToken(blankId: string): Promise<string> {
+    return new SignJWT({ b: blankId }).setProtectedHeader({ alg: 'HS256' }).setAudience('blank').setExpirationTime('10m').sign(this.key);
+  }
+
+  async verifyBlankToken(token: string): Promise<string> {
+    try {
+      const { payload } = await jwtVerify(token, this.key, { algorithms: ['HS256'], audience: 'blank' });
+      return String(payload.b);
+    } catch {
+      throw new ApiError(403, 'link_expired', 'Ссылка на бланк устарела');
+    }
+  }
+
   async verifyAudioToken(token: string): Promise<{ membershipId: string; date: string }> {
     try {
       const { payload } = await jwtVerify(token, this.key, { algorithms: ['HS256'], audience: 'audio' });

@@ -9,6 +9,7 @@ import { todayIn } from '../lib/time.js';
 import { parse, zDate, zId, zText } from '../lib/validate.js';
 import { streamCode as newStreamCode } from '../lib/crypto.js';
 import { memberStats, MemberLabel } from '../stats.js';
+import { logAccess } from './analyses.js';
 import { createStream, seedMemberGoals, STREAM_SELECT, StreamRow, streamView } from '../streams.js';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -227,6 +228,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     await requireModerator(db, req.userId);
     const { id } = parse(z.object({ id: zId }), req.params);
     const { m, s } = await memberAccess(req.userId, id);
+    // досье содержит шаги и физнормативы — данные о здоровье
+    await logAccess(db, req.userId, m.id, 'dossier');
     const [u] = await db.query<{ name: string; phone: string | null; email: string | null; about: string; contract: string }>(
       'select name, phone, email, about, contract from users where id = $1',
       [m.user_id],
@@ -279,6 +282,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     const { m } = await memberAccess(req.userId, p.id);
     const [s] = await db.query<{ audio_path: string | null }>('select audio_path from statements where membership_id = $1 and date = $2', [m.id, p.date]);
     if (!s?.audio_path) throw notFound('Записи нет');
+    await logAccess(db, req.userId, m.id, 'audio');
     return { url: `/v1/audio/${await auth.audioToken(m.id, p.date)}` };
   });
 
@@ -355,6 +359,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
         requireApproval: z.boolean().optional(),
         stepsThreshold: z.number().int().min(0).max(100_000).optional(),
         modules: z.object({ statements: z.boolean(), steps: z.boolean(), analyses: z.boolean(), goals: z.boolean(), ai: z.boolean() }).partial().optional(),
+        targetIndex: z.number().int().min(10).max(100).optional(),
         reminders: z
           .object({ enabled: z.boolean(), morning: z.string().regex(HHMM, 'время ЧЧ:ММ'), evening: z.string().regex(HHMM, 'время ЧЧ:ММ') })
           .partial()
@@ -369,7 +374,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
          require_approval = coalesce($3, require_approval),
          steps_threshold = coalesce($4, steps_threshold),
          modules = modules || coalesce($5::jsonb, '{}'::jsonb),
-         reminders = reminders || coalesce($6::jsonb, '{}'::jsonb)
+         reminders = reminders || coalesce($6::jsonb, '{}'::jsonb),
+         target_index = coalesce($7, target_index)
        where id = $1`,
       [
         id,
@@ -378,6 +384,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
         b.stepsThreshold ?? null,
         b.modules ? JSON.stringify(b.modules) : null,
         b.reminders ? JSON.stringify(b.reminders) : null,
+        b.targetIndex ?? null,
       ],
     );
     const [s] = await db.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.id = $1`, [id]);

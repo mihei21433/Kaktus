@@ -7,13 +7,14 @@ export type MembershipRow = {
   status: 'pending' | 'approved' | 'rejected' | 'blocked' | 'left' | 'cancelled';
   stream_id: string;
   requested_at: Date;
+  decided_at: Date | null;
   dismissed_at: Date | null;
 };
 
 /** Последнее участие, которое ещё что-то значит для экрана: действующее или свежий отказ. */
 export async function currentMembership(q: Queryable, userId: string): Promise<MembershipRow | null> {
   const [m] = await q.query<MembershipRow>(
-    `select id, status, stream_id, requested_at, dismissed_at from memberships
+    `select id, status, stream_id, requested_at, decided_at, dismissed_at from memberships
      where user_id = $1 order by requested_at desc limit 1`,
     [userId],
   );

@@ -5,6 +5,7 @@ import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { ApiError, conflict, notFound } from '../lib/errors.js';
 import { parse, zText } from '../lib/validate.js';
+import { buildAnalyses, shortSummary } from '../analyses/service.js';
 import { currentMembership, loadStream } from '../membership.js';
 import { seedMemberGoals, STREAM_SELECT, StreamRow, streamView } from '../streams.js';
 
@@ -52,9 +53,13 @@ export async function buildState(q: Queryable, userId: string) {
     statements: {} as Record<string, unknown>,
     steps: {} as Record<string, number>,
     fitness: {} as Record<string, Record<string, number>>,
+    analyses: null as ReturnType<typeof shortSummary> | null,
     reminders: (stream?.reminders as { enabled: boolean; morning: string; evening: string } | undefined) ?? { enabled: true, morning: '09:00', evening: '21:00' },
   };
   if (!m || m.status !== 'approved') return state;
+  if (stream && (stream.modules as { analyses?: boolean })?.analyses !== false) {
+    state.analyses = shortSummary(await buildAnalyses(q, m, stream, (u as UserRow & { sex: 'female' | 'male' | null }).sex));
+  }
 
   const mid = m.id;
   state.goals = (

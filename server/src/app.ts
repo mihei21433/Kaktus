@@ -10,6 +10,7 @@ import { FileStore } from './files.js';
 import { ApiError } from './lib/errors.js';
 import { createMessenger, Messenger } from './providers/index.js';
 import { createPush, Push } from './push.js';
+import { analysesRoutes } from './routes/analyses.js';
 import { authRoutes } from './routes/auth.js';
 import { dataRoutes } from './routes/data.js';
 import { meRoutes } from './routes/me.js';
@@ -35,6 +36,8 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
 
   // Аудио приходит «как есть» (тело запроса = файл)
   app.addContentTypeParser(/^audio\//, { parseAs: 'buffer', bodyLimit: 8 * 1024 * 1024 }, (_req, body, done) => done(null, body));
+  // Бланки анализов: фото и PDF
+  app.addContentTypeParser(/^(image\/|application\/pdf)/, { parseAs: 'buffer', bodyLimit: 15 * 1024 * 1024 }, (_req, body, done) => done(null, body));
 
   await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] });
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
@@ -60,6 +63,19 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
 
   app.get('/health', async () => ({ ok: true }));
 
+  app.get('/v1/files/blank/:token', async (req, reply) => {
+    const { token } = req.params as { token: string };
+    const id = await deps.auth.verifyBlankToken(token);
+    const [b] = await db.query<{ file_path: string; file_name: string }>('select file_path, file_name from blanks where id = $1', [id]);
+    if (!b || !(await deps.files.exists(b.file_path))) throw new ApiError(404, 'not_found', 'Бланк не найден');
+    const f = deps.files.open(b.file_path);
+    return reply
+      .header('Content-Type', f.type)
+      .header('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(b.file_name)}`)
+      .header('Cache-Control', 'private, max-age=600')
+      .send(f.stream);
+  });
+
   // Аудио по подписанной ссылке (без заголовка авторизации — его не умеет передавать плеер)
   app.get('/v1/audio/:token', async (req, reply) => {
     const { token } = req.params as { token: string };
@@ -78,6 +94,7 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
         await meRoutes(r, deps);
         await dataRoutes(r, deps);
         await moderatorRoutes(r, deps);
+        await analysesRoutes(r, deps);
       });
     },
     { prefix: '/v1' },

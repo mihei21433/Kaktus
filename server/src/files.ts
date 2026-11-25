@@ -17,7 +17,25 @@ export const AUDIO_TYPES: Record<string, string> = {
   'audio/mpeg': 'mp3',
   'audio/3gpp': '3gp',
 };
-const SERVE_TYPE: Record<string, string> = { m4a: 'audio/mp4', webm: 'audio/webm', mp3: 'audio/mpeg', '3gp': 'audio/3gpp' };
+/** Бланки анализов: фото и PDF. */
+export const BLANK_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+const SERVE_TYPE: Record<string, string> = {
+  m4a: 'audio/mp4',
+  webm: 'audio/webm',
+  mp3: 'audio/mpeg',
+  '3gp': 'audio/3gpp',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  heic: 'image/heic',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
 
 export class FileStore {
   constructor(private root: string) {}
@@ -36,12 +54,22 @@ export class FileStore {
     return rel;
   }
 
+  async saveBlank(membershipId: string, ext: string, data: Buffer): Promise<string> {
+    const rel = path.join('blanks', membershipId, `${randomBytes(8).toString('hex')}.${ext}`);
+    const abs = this.abs(rel);
+    await mkdir(path.dirname(abs), { recursive: true });
+    await writeFile(abs, data);
+    return rel;
+  }
+
   async remove(rel: string | null | undefined) {
     if (rel) await rm(this.abs(rel), { force: true });
   }
 
   async removeMembership(membershipId: string) {
-    await rm(this.abs(path.join('voice', membershipId)), { recursive: true, force: true });
+    for (const dir of ['voice', 'blanks']) {
+      await rm(this.abs(path.join(dir, membershipId)), { recursive: true, force: true });
+    }
   }
 
   async exists(rel: string): Promise<boolean> {
