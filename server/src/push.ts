@@ -13,7 +13,8 @@ export function createPush(db: Db, cfg: Config, log: Log): Push {
     async notifyUser(userId, title, body, data) {
       const tokens = await db.query<{ token: string }>('select token from push_tokens where user_id = $1', [userId]);
       if (!tokens.length) return;
-      const messages = tokens.map((t) => ({ to: t.token, title, body, data, sound: 'default' }));
+      // Канал 'default' создаёт приложение с высокой важностью — Android показывает уведомление сразу
+      const messages = tokens.map((t) => ({ to: t.token, title, body, data, sound: 'default', channelId: 'default', priority: 'high' }));
       if (!cfg.push.enabled) {
         log.info({ userId, title, body }, 'Пуш (выключено PUSH_ENABLED, не отправлено)');
         return;

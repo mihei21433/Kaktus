@@ -10,7 +10,7 @@ import { AppState as RNAppState } from 'react-native';
 
 import { todayKey } from '@/lib/date';
 import * as api from './api';
-import { configureForegroundNotifications, onNotificationTap, registerForPush } from './push';
+import { configureForegroundNotifications, registerForPush } from './push';
 import { buildDemoState } from './demo';
 import { CONSENT_VERSION } from './mock-server';
 import { AppState, Criterion, Goal, Horizon, InterimGoal, MembershipStatus, Stream, Task } from './types';
@@ -346,13 +346,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
   }, [state, hydrated]);
 
-  // Пуш-уведомления: регистрация после входа, обновление данных по нажатию
+  // Пуш-уведомления: показ при открытом приложении и регистрация после входа
+  // (нажатие на уведомление обрабатывает NotificationRouter)
   useEffect(() => {
     configureForegroundNotifications();
-    return onNotificationTap(() => {
-      if (api.hasSession() && !ref.current.demo) void actions.refresh();
-    });
-  }, [actions]);
+  }, []);
   useEffect(() => {
     if (loggedIn && hydrated) void registerForPush();
   }, [loggedIn, hydrated]);

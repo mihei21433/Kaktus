@@ -53,9 +53,12 @@ export async function registerForPush(): Promise<void> {
   }
 }
 
-/** Нажатие на уведомление: обновить данные. */
-export function onNotificationTap(fn: () => void) {
-  if (Platform.OS === 'web') return () => {};
-  const sub = Notifications.addNotificationResponseReceivedListener(() => fn());
-  return () => sub.remove();
+export type PushData = { type?: string; kind?: string; status?: string };
+
+/** Куда вести по нажатию: утреннее напоминание — к заявлению, вечернее и задача — на «Сегодня». */
+export function screenFor(data: PushData): '/statement' | '/today' | '/' | null {
+  if (data.type === 'reminder') return data.kind === 'morning' ? '/statement' : '/today';
+  if (data.type === 'task') return '/today';
+  if (data.type === 'membership') return '/';
+  return null;
 }
