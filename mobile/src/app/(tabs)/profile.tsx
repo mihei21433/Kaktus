@@ -50,7 +50,7 @@ export default function ProfileScreen() {
         <RowLink
           title="Напоминания"
           subtitle="время задаёт модератор"
-          value={`${state.reminders.morning}, ${state.reminders.evening}`}
+          value={state.reminders.enabled === false ? 'выключены' : `${state.reminders.morning}, ${state.reminders.evening}`}
         />
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <RowLink title="Мой поток" value={stream.name} onPress={() => router.push('/my-stream')} />

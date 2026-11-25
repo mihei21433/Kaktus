@@ -29,7 +29,7 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
     push: opts.push ?? createPush(db, cfg, app.log),
   };
 
-  await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] });
+  await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] });
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
 
   app.decorateRequest('userId', '');

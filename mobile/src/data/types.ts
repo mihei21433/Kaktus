@@ -7,6 +7,8 @@ export const HORIZONS: { value: Horizon; label: string; days: number }[] = [
   { value: 'quarter', label: '3 месяца', days: 90 },
 ];
 
+export type Reminders = { enabled?: boolean; morning: string; evening: string };
+
 export type FitnessNorm = { id: string; name: string; unit: string; norm: number };
 
 export type Stream = {
@@ -21,6 +23,7 @@ export type Stream = {
   norms: FitnessNorm[];
   /** Разделы, включённые модератором */
   modules: { statements: boolean; steps: boolean; analyses: boolean; goals: boolean; ai: boolean };
+  reminders?: Reminders;
 };
 
 export type MembershipStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'blocked';
@@ -99,5 +102,5 @@ export type AppState = {
   statements: Record<string, Statement>;
   steps: Record<string, number>;
   fitness: Record<string, Record<string, number>>;
-  reminders: { morning: string; evening: string };
+  reminders: Reminders;
 };

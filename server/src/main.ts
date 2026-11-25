@@ -4,6 +4,8 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { migrate, openDb } from './db/index.js';
 import { assertNotLocked, holdLock } from './db/lock.js';
+import { createPush } from './push.js';
+import { runReminders } from './reminders.js';
 
 const cfg = loadConfig();
 if (!cfg.databaseUrl) {
@@ -29,3 +31,12 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 await app.listen({ port: cfg.port, host: cfg.host });
+
+// Напоминания: проверка раз в минуту
+const push = createPush(db, cfg, app.log);
+const tick = () =>
+  runReminders(db, push)
+    .then((n) => n && app.log.info(`напоминаний отправлено: ${n}`))
+    .catch((e) => app.log.error(e, 'ошибка напоминаний'));
+setInterval(tick, 60_000);
+void tick();

@@ -90,6 +90,7 @@ describe('Кактус API', () => {
     assert.equal(res.statusCode, 204);
     assert.match(String(res.headers['access-control-allow-methods']), /PUT/);
     assert.match(String(res.headers['access-control-allow-methods']), /DELETE/);
+    assert.match(String(res.headers['access-control-allow-methods']), /PATCH/);
   });
 
   it('неверный номер и почта отклоняются', async () => {

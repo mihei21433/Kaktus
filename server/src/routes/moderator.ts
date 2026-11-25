@@ -11,6 +11,8 @@ import { streamCode as newStreamCode } from '../lib/crypto.js';
 import { memberStats, MemberLabel } from '../stats.js';
 import { createStream, seedMemberGoals, STREAM_SELECT, StreamRow, streamView } from '../streams.js';
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 async function requireModerator(q: Queryable, userId: string) {
   const [u] = await q.query<{ is_moderator: boolean }>('select is_moderator from users where id = $1', [userId]);
   if (!u?.is_moderator) throw forbidden('Раздел доступен только модераторам');
@@ -334,6 +336,10 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push }: Deps) 
         requireApproval: z.boolean().optional(),
         stepsThreshold: z.number().int().min(0).max(100_000).optional(),
         modules: z.object({ statements: z.boolean(), steps: z.boolean(), analyses: z.boolean(), goals: z.boolean(), ai: z.boolean() }).partial().optional(),
+        reminders: z
+          .object({ enabled: z.boolean(), morning: z.string().regex(HHMM, 'время ЧЧ:ММ'), evening: z.string().regex(HHMM, 'время ЧЧ:ММ') })
+          .partial()
+          .optional(),
       }),
       req.body,
     );
@@ -343,9 +349,17 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push }: Deps) 
          name = coalesce($2, name),
          require_approval = coalesce($3, require_approval),
          steps_threshold = coalesce($4, steps_threshold),
-         modules = modules || coalesce($5::jsonb, '{}'::jsonb)
+         modules = modules || coalesce($5::jsonb, '{}'::jsonb),
+         reminders = reminders || coalesce($6::jsonb, '{}'::jsonb)
        where id = $1`,
-      [id, b.name ?? null, b.requireApproval ?? null, b.stepsThreshold ?? null, b.modules ? JSON.stringify(b.modules) : null],
+      [
+        id,
+        b.name ?? null,
+        b.requireApproval ?? null,
+        b.stepsThreshold ?? null,
+        b.modules ? JSON.stringify(b.modules) : null,
+        b.reminders ? JSON.stringify(b.reminders) : null,
+      ],
     );
     const [s] = await db.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.id = $1`, [id]);
     return { ...streamView(s), requireApproval: s.require_approval };

@@ -29,6 +29,7 @@ export default function StreamSettingsScreen() {
   const [turningOff, setTurningOff] = useState<ModuleKey | null>(null);
   const [newCode, setNewCode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [times, setTimes] = useState<{ morning?: string; evening?: string }>({});
 
   const patch = async (body: object) => {
     try {
@@ -109,6 +110,17 @@ export default function StreamSettingsScreen() {
             </Small>
           </Card>
 
+          <Caption>Напоминания</Caption>
+          <RemindersCard
+            value={data.reminders ?? { enabled: true, morning: '09:00', evening: '21:00' }}
+            draft={times}
+            onDraft={setTimes}
+            onSave={async (body) => {
+              await patch({ reminders: body });
+              setTimes({});
+            }}
+          />
+
           <Caption>Модули программы</Caption>
           <Card style={{ gap: 14 }}>
             {MODULES.map((m) => (
@@ -128,7 +140,7 @@ export default function StreamSettingsScreen() {
             <Small color={colors.text}>Выключенный модуль исчезает у участников. Данные сохраняются.</Small>
           </Card>
           <Text style={[font.body, { color: colors.textMuted, fontSize: 12 }]}>
-            Расписание напоминаний, физнормативы, сроки целей и шаблоны настроек — в следующих версиях.
+            Физнормативы, сроки целей и шаблоны настроек — в следующих версиях.
           </Text>
 
           <ConfirmDialog
@@ -163,5 +175,79 @@ export default function StreamSettingsScreen() {
         </>
       ) : null}
     </Screen>
+  );
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Время напоминаний по часовому поясу потока; пуш получает только тот, кто ещё не сделал нужное. */
+function RemindersCard({
+  value,
+  draft,
+  onDraft,
+  onSave,
+}: {
+  value: { enabled?: boolean; morning: string; evening: string };
+  draft: { morning?: string; evening?: string };
+  onDraft: (d: { morning?: string; evening?: string }) => void;
+  onSave: (body: { enabled?: boolean; morning?: string; evening?: string }) => Promise<void>;
+}) {
+  const enabled = value.enabled !== false;
+  const morning = draft.morning ?? value.morning;
+  const evening = draft.evening ?? value.evening;
+  const changed = morning !== value.morning || evening !== value.evening;
+  const valid = TIME_RE.test(morning) && TIME_RE.test(evening);
+  const input = (v: string, set: (t: string) => void) => (
+    <TextInput
+      value={v}
+      onChangeText={(t) => set(t.replace(/[^\d:]/g, '').slice(0, 5))}
+      placeholder="09:00"
+      placeholderTextColor={colors.textMuted}
+      keyboardType="numbers-and-punctuation"
+      style={{
+        width: 80,
+        height: 40,
+        color: TIME_RE.test(v) ? colors.text : colors.red,
+        backgroundColor: colors.input,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.border,
+        textAlign: 'center',
+        fontSize: 16,
+      }}
+    />
+  );
+  return (
+    <Card style={{ gap: 12 }}>
+      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+        <Text style={{ color: colors.text, fontSize: 15 }}>Напоминания включены</Text>
+        <Toggle value={enabled} onChange={(v) => void onSave({ enabled: v })} />
+      </View>
+      {enabled ? (
+        <>
+          <View style={[ui.row, { justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: 15 }}>Утро</Text>
+              <Small style={{ fontSize: 12 }}>заявление и шаги</Small>
+            </View>
+            {input(morning, (t) => onDraft({ ...draft, morning: t }))}
+          </View>
+          <View style={[ui.row, { justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: 15 }}>Вечер</Text>
+              <Small style={{ fontSize: 12 }}>закрыть задачи дня</Small>
+            </View>
+            {input(evening, (t) => onDraft({ ...draft, evening: t }))}
+          </View>
+          {changed ? (
+            <Button title={valid ? 'Сохранить время' : 'Время в формате ЧЧ:ММ'} variant="blue" small disabled={!valid} onPress={() => onSave({ morning, evening })} />
+          ) : null}
+        </>
+      ) : null}
+      <Small style={{ fontSize: 12 }}>
+        Время — по часовому поясу потока. Напоминание приходит только тем, кто ещё не прислал заявление и шаги (утром) или не
+        закрыл задачи (вечером), не чаще раза в день.
+      </Small>
+    </Card>
   );
 }

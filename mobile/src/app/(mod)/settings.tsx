@@ -33,7 +33,7 @@ export default function ModSettingsScreen() {
         </Card>
       ))}
       <Small style={{ fontSize: 12 }}>
-        Позже здесь появятся: команда модераторов, расписание напоминаний, физнормативы, сроки целей и панель анализов.
+        Позже здесь появятся: команда модераторов, физнормативы, сроки целей и панель анализов.
       </Small>
       <RowLink title="Выйти из аккаунта" color={colors.red} onPress={() => setLogout(true)} />
       <ConfirmDialog

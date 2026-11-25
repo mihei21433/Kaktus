@@ -52,7 +52,7 @@ export async function buildState(q: Queryable, userId: string) {
     statements: {} as Record<string, unknown>,
     steps: {} as Record<string, number>,
     fitness: {} as Record<string, Record<string, number>>,
-    reminders: { morning: '09:00', evening: '21:00' },
+    reminders: (stream?.reminders as { enabled: boolean; morning: string; evening: string } | undefined) ?? { enabled: true, morning: '09:00', evening: '21:00' },
   };
   if (!m || m.status !== 'approved') return state;
 
