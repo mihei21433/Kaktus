@@ -110,4 +110,12 @@ export type AppState = {
   steps: Record<string, number>;
   fitness: Record<string, Record<string, number>>;
   reminders: Reminders;
+  /** Короткая сводка анализов с сервера: открытый замер и последний индекс */
+  analyses?: AnalysesSummary | null;
+};
+
+export type AnalysesSummary = {
+  current: { id: string; name: string; deadline: string; submitted: boolean } | null;
+  index: number | null;
+  targetIndex: number;
 };

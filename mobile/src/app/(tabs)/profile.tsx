@@ -38,10 +38,17 @@ export default function ProfileScreen() {
         <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{profile.about || 'Не заполнено'}</Text>
       </Card>
       <Card style={{ paddingVertical: 0 }}>
-        <RowLink title="Мои анализы и индекс здоровья" value="скоро" />
+        <RowLink
+          title="Мои анализы и индекс здоровья"
+          value={state.demo ? 'на сервере' : state.analyses?.index != null ? `${state.analyses.index} %` : '—'}
+          onPress={() => router.push('/analyses')}
+        />
       </Card>
       <Card style={{ paddingVertical: 0 }}>
         <RowLink title="Экспорт моих данных" value="скоро" />
+      </Card>
+      <Card style={{ paddingVertical: 0 }}>
+        <RowLink title="Журнал доступа к моим данным" subtitle="когда модератор открывал данные о здоровье" onPress={() => router.push('/access-log')} />
       </Card>
       <Card style={{ paddingVertical: 0 }}>
         <RowLink title="Согласие на обработку данных" onPress={() => router.push('/consent-settings')} />

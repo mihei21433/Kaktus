@@ -8,10 +8,11 @@ import { api, ApiError } from '@/data/api';
 import { useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
 import { Stream } from '@/data/types';
-import { Button, Caption, Card, ConfirmDialog, Header, Screen, Small, Toggle, ui } from '@/ui';
+import { Button, Caption, Card, Chip, ConfirmDialog, Header, Screen, Small, Toggle, ui } from '@/ui';
+import { addDays, formatDayMonth, plural, todayKey } from '@/lib/date';
 import { colors, font } from '@/theme';
 
-type Settings = Stream & { requireApproval: boolean };
+type Settings = Stream & { requireApproval: boolean; targetIndex: number };
 type ModuleKey = keyof Stream['modules'];
 
 const MODULES: { key: ModuleKey; title: string; sub: string }[] = [
@@ -109,6 +110,9 @@ export default function StreamSettingsScreen() {
               Срок потока: {data.durationDays} дней, цели — до {data.goalDeadline}
             </Small>
           </Card>
+
+          <Caption>Замеры анализов</Caption>
+          <MeasurementsCard streamId={id} targetIndex={data.targetIndex} onTarget={(v) => patch({ targetIndex: v })} />
 
           <Caption>Напоминания</Caption>
           <RemindersCard
@@ -248,6 +252,100 @@ function RemindersCard({
         Время — по часовому поясу потока. Напоминание приходит только тем, кто ещё не прислал заявление и шаги (утром) или не
         закрыл задачи (вечером), не чаще раза в день.
       </Small>
+    </Card>
+  );
+}
+
+type MeasurementRow = { id: string; name: string; opensOn: string; deadline: string; closedAt: string | null; submitted: number };
+
+/** Замеры: модератор открывает период сдачи анализов со сроком и закрывает его. */
+function MeasurementsCard({ streamId, targetIndex, onTarget }: { streamId: string; targetIndex: number; onTarget: (v: number) => Promise<void> }) {
+  const { showError } = useApp();
+  const list = useQuery<MeasurementRow[]>(`/v1/mod/streams/${streamId}/measurements`);
+  const [name, setName] = useState('');
+  const [days, setDays] = useState(14);
+  const [closing, setClosing] = useState<MeasurementRow | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+
+  const create = async () => {
+    try {
+      await api('POST', `/v1/mod/streams/${streamId}/measurements`, { name: name.trim(), deadline: addDays(todayKey(), days) });
+      setName('');
+      await list.reload();
+    } catch (e) {
+      showError(e instanceof ApiError ? e.message : 'Не удалось открыть замер');
+    }
+  };
+
+  return (
+    <Card style={{ gap: 12 }}>
+      {list.data?.length === 0 ? <Small>Замеров ещё не было. Откройте первый — участники увидят на «Сегодня» просьбу сдать анализы.</Small> : null}
+      {list.data?.map((m) => (
+        <View key={m.id} style={[ui.row, { justifyContent: 'space-between' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 15 }}>{m.name}</Text>
+            <Small style={{ fontSize: 12 }}>
+              {m.closedAt ? 'закрыт' : `открыт до ${formatDayMonth(m.deadline)}`} · залили {m.submitted}
+            </Small>
+          </View>
+          {!m.closedAt ? <Button title="Закрыть" variant="secondary" small onPress={() => setClosing(m)} /> : null}
+        </View>
+      ))}
+      <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+        <Text style={{ color: colors.text, fontSize: 15 }}>Новый замер</Text>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Например: Осенний замер"
+          placeholderTextColor={colors.textMuted}
+          style={{ height: 42, color: colors.text, backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border }}
+        />
+        <Small style={{ fontSize: 12 }}>Срок сдачи — через</Small>
+        <View style={ui.row}>
+          {[7, 14, 30].map((d) => (
+            <Chip key={d} label={`${d} ${plural(d, ['день', 'дня', 'дней'])}`} color={colors.blue} selected={days === d} onPress={() => setDays(d)} />
+          ))}
+        </View>
+        <Button title="Открыть замер" variant="blue" small disabled={!name.trim()} onPress={create} />
+      </View>
+      <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+        <Text style={{ color: colors.text, fontSize: 15 }}>Целевой индекс здоровья, %</Text>
+        <View style={ui.row}>
+          <TextInput
+            value={target ?? String(targetIndex)}
+            onChangeText={(v) => setTarget(v.replace(/\D/g, '').slice(0, 3))}
+            keyboardType="number-pad"
+            style={{ flex: 1, height: 42, color: colors.text, backgroundColor: colors.input, borderRadius: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border }}
+          />
+          <Button
+            title="Сохранить"
+            variant="blue"
+            small
+            disabled={!target || target === String(targetIndex) || Number(target) < 10 || Number(target) > 100}
+            onPress={async () => {
+              await onTarget(Number(target));
+              setTarget(null);
+            }}
+          />
+        </View>
+      </View>
+      <ConfirmDialog
+        visible={!!closing}
+        title={`Закрыть замер «${closing?.name ?? ''}»?`}
+        message="Участники больше не смогут загружать в него бланки и менять значения. Залитые результаты сохранятся."
+        confirmLabel="Закрыть замер"
+        onCancel={() => setClosing(null)}
+        onConfirm={async () => {
+          const m = closing!;
+          setClosing(null);
+          try {
+            await api('POST', `/v1/mod/measurements/${m.id}/close`);
+            await list.reload();
+          } catch (e) {
+            showError(e instanceof ApiError ? e.message : 'Не удалось закрыть');
+          }
+        }}
+      />
     </Card>
   );
 }

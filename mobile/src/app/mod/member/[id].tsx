@@ -4,22 +4,25 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { Avatar, LabelTag, LoadState } from '@/components/mod-ui';
 import { VoicePlayer } from '@/components/voice-player';
+import { DISCLAIMER, IndexCard, IndicatorRow, SummaryTiles } from '@/components/analyses-ui';
+import { type Analyses, errorText, latestWithValues, openBlank } from '@/data/analyses';
 import { api, ApiError } from '@/data/api';
 import { DayView, Dossier, useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
 import { HORIZONS } from '@/data/types';
 import { mmss } from '@/lib/audio';
 import { formatDayMonth, formatNumber, formatTime, plural } from '@/lib/date';
-import { Button, Caption, Card, Chip, ConfirmDialog, Header, ProgressBar, Screen, Small, Stat, Tag, ui } from '@/ui';
+import { Button, Caption, Card, Chip, ConfirmDialog, Header, Ionicons, ProgressBar, Screen, Small, Stat, Tag, ui } from '@/ui';
 import { colors, font } from '@/theme';
 
-type Tab = 'overview' | 'tasks' | 'goals' | 'steps' | 'statements';
+type Tab = 'overview' | 'tasks' | 'goals' | 'steps' | 'statements' | 'analyses';
 const TABS: { value: Tab; label: string }[] = [
   { value: 'overview', label: 'Обзор' },
   { value: 'tasks', label: 'Задачи' },
   { value: 'goals', label: 'Цели' },
   { value: 'steps', label: 'Шаги' },
   { value: 'statements', label: 'Заявления' },
+  { value: 'analyses', label: 'Анализы' },
 ];
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)} %`);
@@ -71,6 +74,7 @@ export default function DossierScreen() {
           {tab === 'goals' ? <GoalsTab d={data} /> : null}
           {tab === 'steps' ? <StepsTab d={data} /> : null}
           {tab === 'statements' ? <StatementsTab d={data} /> : null}
+          {tab === 'analyses' ? <AnalysesTab memberId={id} /> : null}
 
           {!data.member.blocked ? (
             <Button title="Поставить задачу" variant="blue" onPress={() => router.push({ pathname: '/mod/assign/[id]', params: { id } })} />
@@ -345,6 +349,63 @@ function StatementsTab({ d }: { d: Dossier }) {
           )}
         </Card>
       ))}
+    </>
+  );
+}
+
+/** Анализы участника. Открытие вкладки записывается в журнал доступа участника. */
+function AnalysesTab({ memberId }: { memberId: string }) {
+  const { showError } = useApp();
+  const { data, error, loading, reload } = useQuery<Analyses>(`/v1/mod/members/${memberId}/analyses`);
+  const [all, setAll] = useState(false);
+  if (!data) return <LoadState loading={loading} error={error} onRetry={reload} />;
+  const m = latestWithValues(data);
+  const indexed = [...data.measurements].reverse().find((x) => x.index) ?? null;
+  const withBlanks = [...data.measurements].reverse().find((x) => x.blanks.length) ?? null;
+  return (
+    <>
+      <IndexCard m={indexed} target={data.targetIndex} />
+      {!m ? (
+        <Card style={{ alignItems: 'center', gap: 4, paddingVertical: 16 }}>
+          <Text style={font.title}>Результатов пока нет</Text>
+          <Small style={{ textAlign: 'center' }}>
+            {data.measurements.length ? 'Участник ещё не ввёл значения.' : 'Откройте замер в настройках потока — участник получит просьбу сдать анализы.'}
+          </Small>
+        </Card>
+      ) : (
+        <>
+          <Small style={{ fontSize: 12 }}>
+            {m.name} · {m.summary.filled} из {m.summary.total} показателей{m.submittedAt ? ' · залито' : ' · ещё не залито'}
+            {data.sex ? '' : ' · пол не указан'}
+          </Small>
+          <SummaryTiles m={m} />
+          <Caption>{all ? 'Все показатели' : 'Отклонения и показатели у границы'}</Caption>
+          {data.catalog
+            .filter((c) => (all ? !!m.values[c.id] : ['low', 'high', 'border', 'unknown'].includes(m.values[c.id]?.status ?? '')))
+            .map((c) => (
+              <IndicatorRow key={c.id} c={c} m={m} />
+            ))}
+          <Button title={all ? 'Только отклонения' : 'Показать все показатели'} variant="secondary" small onPress={() => setAll(!all)} />
+        </>
+      )}
+      {withBlanks ? (
+        <>
+          <Caption>Бланки · {withBlanks.name}</Caption>
+          {withBlanks.blanks.map((b) => (
+            <Card
+              key={b.id}
+              onPress={() => openBlank(`/v1/mod/members/${memberId}/blanks/${b.id}/link`).catch((e) => showError(errorText(e, 'Не удалось открыть')))}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name={b.mime === 'application/pdf' ? 'document-outline' : 'image-outline'} size={18} color={colors.blue} />
+              <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
+                {b.fileName}
+              </Text>
+              <Text style={{ color: colors.blue, fontWeight: '600' }}>Открыть</Text>
+            </Card>
+          ))}
+        </>
+      ) : null}
+      <Small style={{ fontSize: 11 }}>{DISCLAIMER}</Small>
     </>
   );
 }

@@ -31,6 +31,16 @@ export default function TodayScreen() {
         </Small>
       </View>
 
+      {state.analyses?.current && !state.analyses.current.submitted ? (
+        <Card background="#14243A" borderColor="#1E3A5C" onPress={() => router.push('/analyses')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={[font.title, { fontSize: 14 }]}>Сдайте анализы до {formatDayMonth(state.analyses.current.deadline)}</Text>
+            <Small style={{ fontSize: 12 }}>Замер «{state.analyses.current.name}» открыт</Small>
+          </View>
+          <Text style={{ color: colors.blue, fontWeight: '600' }}>Загрузить ›</Text>
+        </Card>
+      ) : null}
+
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <View>
           <Text style={font.title}>Задачи дня</Text>

@@ -109,12 +109,16 @@ export async function freshAccessToken(): Promise<string | null> {
 }
 
 /** Загрузка файла «как есть» (аудио). */
-export async function upload<T = unknown>(path: string, body: Blob, contentType: string): Promise<T> {
+export async function upload<T = unknown>(path: string, body: Blob, contentType: string, opts: { method?: string; headers?: Record<string, string> } = {}): Promise<T> {
   const send = async () => {
     const token = await freshAccessToken();
     let res: Response;
     try {
-      res = await fetch(API_URL + path, { method: 'PUT', headers: { 'Content-Type': contentType, Authorization: `Bearer ${token}` }, body });
+      res = await fetch(API_URL + path, {
+        method: opts.method ?? 'PUT',
+        headers: { 'Content-Type': contentType, Authorization: `Bearer ${token}`, ...opts.headers },
+        body,
+      });
     } catch {
       throw new ApiError(0, 'network', 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз');
     }
