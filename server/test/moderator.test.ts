@@ -130,7 +130,7 @@ describe('Кабинет модератора', () => {
       notify: true,
     });
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.deepEqual(pushes.at(-1), { userId: people['Анна'].userId, title: 'Модератор добавил задачу', body: 'Выпить витамин D после завтрака' });
+    assert.deepEqual(pushes.at(-1), { userId: people['Анна'].userId, title: 'Модератор добавил задачу', body: 'Откройте приложение, чтобы посмотреть' });
 
     const st = await call('GET', '/v1/me/state', people['Анна'].accessToken);
     const t = st.body.tasks.find((x: { id: string }) => x.id === taskId);

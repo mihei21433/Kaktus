@@ -73,7 +73,10 @@ export default function BroadcastsScreen() {
         <Text style={[font.title, { fontSize: 14 }]}>{stream?.name ?? 'Поток'}</Text>
         <Text style={{ color: text ? colors.text : colors.textMuted, fontSize: 14 }}>{text || 'Сообщение пока пустое — набранное появится здесь'}</Text>
       </Card>
-      <Small style={{ fontSize: 12 }}>Придёт каждому участнику потока пуш-уведомлением.</Small>
+      <Small style={{ fontSize: 12 }}>
+        Придёт каждому участнику потока пуш-уведомлением. Уведомления проходят через внешние сервисы Expo, Google и Apple — не
+        пишите в рассылках личные и медицинские данные.
+      </Small>
       {sent ? <Text style={{ color: colors.green, fontSize: 14 }}>{sent}</Text> : null}
       <Button
         title={stream ? `Отправить ${stream.members} ${plural(stream.members, ['участнику', 'участникам', 'участникам'])}` : 'Выберите, кому отправить'}

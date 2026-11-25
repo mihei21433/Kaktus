@@ -9,7 +9,10 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "app.kaktus.mobile",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +38,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#4FC879"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

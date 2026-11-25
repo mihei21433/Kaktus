@@ -100,5 +100,4 @@ cd /opt/kaktus && git pull && cd deploy && docker compose up -d --build
 
 ## Приложение для этого сервера
 
-При сборке приложения через EAS задаётся адрес сервера:
-`EXPO_PUBLIC_API_URL=https://api.ваш-домен.kz`. Инструкция по сборке — на следующем шаге.
+Адрес сервера задаётся в `mobile/eas.json`, сборка приложения — по [pilot.md](pilot.md).

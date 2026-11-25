@@ -99,7 +99,7 @@ export default function AssignTaskScreen() {
             multiline
             maxLength={500}
             placeholder="Например: догоняем недельную цель"
-            hint="Участник увидит его под задачей на экране «Сегодня»"
+            hint="Участник увидит его под задачей на экране «Сегодня». В уведомление текст задачи и комментарий не попадают."
             focusColor={colors.blue}
           />
         </>

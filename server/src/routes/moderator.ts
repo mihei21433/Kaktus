@@ -297,7 +297,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push }: Deps) 
       [b.id, m.id, b.goalId, b.text, b.date, b.comment || null],
     );
     if (b.notify) {
-      await push.notifyUser(m.user_id, 'Модератор добавил задачу', b.text, { type: 'task', taskId: b.id });
+      // Текст задачи в уведомление не кладём: пуш идёт через внешние сервисы, а задача может касаться здоровья
+      await push.notifyUser(m.user_id, 'Модератор добавил задачу', 'Откройте приложение, чтобы посмотреть', { type: 'task', taskId: b.id });
     }
     return { ok: true };
   });
