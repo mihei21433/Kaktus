@@ -34,7 +34,8 @@ docker compose exec api node dist/admin.js make-moderator +77011234567 "Ваше
 
 ## 2. Адрес сервера в приложении
 
-Откройте `mobile/eas.json` и замените оба `https://api.kaktus.kz` на адрес вашего сервера.
+Уже прописан: `https://api.vectorfamily.kz` (файл `mobile/eas.json`). Если адрес сервера
+когда-нибудь изменится — поменяйте его там в двух местах и соберите приложение заново.
 
 ## 3. Аккаунт Expo
 
