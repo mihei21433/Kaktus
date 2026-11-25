@@ -29,10 +29,10 @@ curl -fsSL https://get.docker.com | sh
 
 Скачайте проект. Репозиторий закрытый — понадобится токен GitHub
 (github.com → Settings → Developer settings → Fine-grained tokens, доступ «Contents: Read»
-только к репозиторию kaktus). Git спросит логин и токен вместо пароля:
+только к репозиторию Kaktus). Git спросит логин и токен вместо пароля:
 
 ```bash
-git clone https://github.com/mihei21433/kaktus /opt/kaktus
+git clone https://github.com/mihei21433/Kaktus /opt/kaktus
 ```
 
 Настройте переменные:
@@ -62,7 +62,7 @@ docker compose up -d --build
 Проверьте (через минуту, пока выпускается сертификат):
 
 ```bash
-curl https://api.ваш-домен.kz/health
+curl https://api.vectorfamily.kz/health
 ```
 
 Ответ `{"ok":true}` — сервер работает.
