@@ -9,3 +9,6 @@ dist/
 # автообновление сервера: какой коммит выкачен / не поднялся
 deploy/.deployed
 deploy/.failed
+deploy/.web-deployed
+deploy/web/
+backups/

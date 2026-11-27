@@ -72,6 +72,44 @@ jobs:
           echo "::error::Сервер не обновился за 20 минут. Включено ли автообновление (deploy/install-auto-update.sh)? Журнал на сервере: /var/log/kaktus-update.log"
           exit 1
 
+  web:
+    name: Веб-версия
+    needs: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Собрать сайт
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://api.vectorfamily.kz
+        run: |
+          npm ci
+          npx expo export -p web --output-dir dist
+          node scripts/web-pwa.mjs dist "$GITHUB_SHA"
+      - name: Отдать серверу (ветка production-web)
+        working-directory: mobile/dist
+        run: |
+          git init -q -b production-web
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Веб-версия ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" production-web
+      - name: Проверить app.vectorfamily.kz
+        continue-on-error: true
+        run: |
+          for i in $(seq 1 30); do
+            v=$(curl -s -m 10 https://app.vectorfamily.kz/version.txt || true)
+            if [ "$v" = "$GITHUB_SHA" ]; then echo "Веб-версия обновлена"; exit 0; fi
+            sleep 20
+          done
+          echo "::warning::app.vectorfamily.kz пока не отвечает новой версией. Есть ли A-запись app → IP сервера?"
+          exit 1
+
   app:
     name: Приложение по воздуху
     needs: server

@@ -40,8 +40,10 @@ services:
       - '443:443'
     environment:
       API_DOMAIN: ${API_DOMAIN:?задайте API_DOMAIN в .env}
+      APP_DOMAIN: ${APP_DOMAIN:-app.vectorfamily.kz}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro
       - caddy-data:/data
     depends_on:
       - api

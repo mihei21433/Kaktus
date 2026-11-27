@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 
 import { UpdateBanner } from '@/components/app-updates';
 import { ErrorBanner } from '@/components/error-banner';
+import { InstallHint } from '@/components/install-hint';
 import { NotificationRouter } from '@/components/notification-router';
 import { AppProvider, useApp } from '@/data/store';
 import { colors } from '@/theme';
@@ -28,6 +29,7 @@ function Root() {
       <ErrorBanner />
       <UpdateBanner />
       <NotificationRouter />
+      <InstallHint />
     </>
   );
 }
