@@ -2,8 +2,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { BY_ID, type Sex } from '../analyses/catalog.js';
+import { BY_ID, CATALOG, type Override, type Overrides, type Range, type Sex, streamCatalog } from '../analyses/catalog.js';
 import { buildAnalyses } from '../analyses/service.js';
+import { requireModerator, requireOwner, requireStreamAccess } from '../access.js';
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { BLANK_TYPES } from '../files.js';
@@ -92,8 +93,8 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
   app.put('/me/measurements/:mid/values/:ind', async (req) => {
     const p = parse(z.object({ mid: zId, ind: z.string().max(40) }), req.params);
     const b = parse(z.object({ value: z.number().min(0).max(1e6), comparator: z.enum(['=', '<', '>']).default('=') }), req.body);
-    if (!BY_ID.has(p.ind)) throw notFound('Такого показателя нет');
-    const { membership } = await myMeasurement(req.userId, p.mid, true);
+    const { membership, stream } = await myMeasurement(req.userId, p.mid, true);
+    if (!streamCatalog(stream.indicator_norms).some((i) => i.id === p.ind)) throw notFound('Такого показателя в потоке нет');
     await db.query(
       `insert into analysis_values (membership_id, measurement_id, indicator_id, value, comparator) values ($1, $2, $3, $4, $5)
        on conflict (membership_id, measurement_id, indicator_id) do update set value = excluded.value, comparator = excluded.comparator, updated_at = now()`,
@@ -135,10 +136,13 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
   /* ---------- Модератор ---------- */
 
   async function requireModeratorOf(userId: string, streamId: string) {
-    const [u] = await db.query<{ is_moderator: boolean }>('select is_moderator from users where id = $1', [userId]);
-    if (!u?.is_moderator) throw forbidden('Раздел доступен только модераторам');
-    const [r] = await db.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [streamId, userId]);
-    if (!r) throw notFound('Поток не найден');
+    await requireModerator(db, userId);
+    await requireStreamAccess(db, userId, streamId);
+  }
+
+  async function requireOwnerOf(userId: string, streamId: string) {
+    await requireModerator(db, userId);
+    await requireOwner(db, userId, streamId);
   }
 
   async function memberForModerator(userId: string, membershipId: string) {
@@ -166,7 +170,7 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
   app.post('/mod/streams/:id/measurements', async (req) => {
     const { id } = parse(z.object({ id: zId }), req.params);
     const b = parse(z.object({ name: zText(60).min(1), deadline: zDate, opensOn: zDate.optional() }), req.body);
-    await requireModeratorOf(req.userId, id);
+    await requireOwnerOf(req.userId, id);
     const [s] = await db.query<{ timezone: string }>('select timezone from streams where id = $1', [id]);
     const opens = b.opensOn ?? todayIn(s.timezone);
     if (b.deadline < opens) throw badRequest('bad_date', 'Срок сдачи раньше открытия замера');
@@ -179,7 +183,7 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
     const { id } = parse(z.object({ id: zId }), req.params);
     const [m] = await db.query<{ stream_id: string }>('select stream_id from measurements where id = $1', [id]);
     if (!m) throw notFound('Замер не найден');
-    await requireModeratorOf(req.userId, m.stream_id);
+    await requireOwnerOf(req.userId, m.stream_id);
     await db.query('update measurements set closed_at = coalesce(closed_at, now()) where id = $1', [id]);
     return { ok: true };
   });
@@ -198,5 +202,68 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
     if (!b) throw notFound('Бланк не найден');
     await logAccess(db, req.userId, m.id, 'blank');
     return { url: `/v1/files/blank/${await auth.blankToken(p.bid)}` };
+  });
+
+  /* ---------- Нормы анализов потока ---------- */
+
+  const zRange = z
+    .object({ lo: z.number().min(0).max(1e6).optional(), hi: z.number().min(0).max(1e6).optional() })
+    .refine((r) => r.lo !== undefined || r.hi !== undefined, 'Укажите хотя бы одну границу')
+    .refine((r) => r.lo === undefined || r.hi === undefined || r.lo < r.hi, 'Нижняя граница должна быть меньше верхней');
+
+  async function streamOverrides(streamId: string): Promise<Overrides> {
+    const [s] = await db.query<{ indicator_norms: Overrides }>('select indicator_norms from streams where id = $1', [streamId]);
+    return s?.indicator_norms ?? {};
+  }
+
+  /** Все показатели: общая норма, норма потока и учитывается ли показатель. */
+  app.get('/mod/streams/:id/indicators', async (req) => {
+    const { id } = parse(z.object({ id: zId }), req.params);
+    await requireModeratorOf(req.userId, id);
+    const o = await streamOverrides(id);
+    return CATALOG.map((i) => {
+      const ov = o[i.id];
+      const bySex = !i.norm;
+      const pick = (r: Range | 'cycle' | undefined) => (r === 'cycle' ? null : (r ?? null));
+      return {
+        id: i.id,
+        group: i.group,
+        name: i.name,
+        unit: i.unit,
+        bySex,
+        cycle: i.female === 'cycle',
+        off: !!ov?.off,
+        changed: !!(ov && (ov.norm || ov.female || ov.male)),
+        default: bySex ? { female: pick(i.female), male: pick(i.male) } : { norm: i.norm! },
+        current: bySex ? { female: ov?.female ?? pick(i.female), male: ov?.male ?? pick(i.male) } : { norm: ov?.norm ?? i.norm! },
+      };
+    });
+  });
+
+  app.put('/mod/streams/:id/indicators/:ind', async (req) => {
+    const p = parse(z.object({ id: zId, ind: z.string().max(40) }), req.params);
+    const b = parse(z.object({ off: z.boolean().default(false), norm: zRange.optional(), female: zRange.optional(), male: zRange.optional() }), req.body);
+    await requireOwnerOf(req.userId, p.id);
+    const ind = BY_ID.get(p.ind);
+    if (!ind) throw notFound('Такого показателя нет');
+    if (ind.norm && (b.female || b.male)) throw badRequest('bad_norm', 'У этого показателя одна норма для всех');
+    if (!ind.norm && b.norm) throw badRequest('bad_norm', 'У этого показателя нормы отдельно для женщин и мужчин');
+    const ov: Override = {};
+    if (b.off) ov.off = true;
+    if (b.norm) ov.norm = b.norm;
+    if (b.female) ov.female = b.female;
+    if (b.male) ov.male = b.male;
+    const key = `{${p.ind}}`;
+    if (Object.keys(ov).length) await db.query('update streams set indicator_norms = jsonb_set(indicator_norms, $2, $3::jsonb) where id = $1', [p.id, key, JSON.stringify(ov)]);
+    else await db.query('update streams set indicator_norms = indicator_norms - $2 where id = $1', [p.id, p.ind]);
+    return { ok: true };
+  });
+
+  /** Вернуть общую норму и включить показатель обратно. */
+  app.delete('/mod/streams/:id/indicators/:ind', async (req) => {
+    const p = parse(z.object({ id: zId, ind: z.string().max(40) }), req.params);
+    await requireOwnerOf(req.userId, p.id);
+    await db.query('update streams set indicator_norms = indicator_norms - $2 where id = $1', [p.id, p.ind]);
+    return { ok: true };
   });
 }

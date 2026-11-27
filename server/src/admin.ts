@@ -9,12 +9,12 @@
 import { mkdir } from 'node:fs/promises';
 
 import { loadConfig } from './config.js';
-import { migrate, openDb, Queryable } from './db/index.js';
+import { migrate, openDb } from './db/index.js';
 import { assertNotLocked } from './db/lock.js';
-import { normalizeEmail, normalizePhone } from './lib/identity.js';
 import { todayIn } from './lib/time.js';
 import { decideMembership } from './routes/moderator.js';
 import { createStream } from './streams.js';
+import { findOrCreateUser } from './users.js';
 
 const cfg = loadConfig();
 if (!cfg.databaseUrl) {
@@ -30,16 +30,6 @@ const db = await openDb({ url: cfg.databaseUrl, dataDir: cfg.dataDir });
 await migrate(db);
 
 const [cmd, ...args] = process.argv.slice(2);
-
-async function findOrCreateUser(q: Queryable, contact: string): Promise<string> {
-  const isEmail = contact.includes('@');
-  const value = isEmail ? normalizeEmail(contact) : normalizePhone(contact);
-  const col = isEmail ? 'email' : 'phone';
-  const [u] = await q.query<{ id: string }>(`select id from users where ${col} = $1`, [value]);
-  if (u) return u.id;
-  const [n] = await q.query<{ id: string }>(`insert into users (${col}) values ($1) returning id`, [value]);
-  return n.id;
-}
 
 try {
   switch (cmd) {

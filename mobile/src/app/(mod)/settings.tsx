@@ -28,14 +28,11 @@ export default function ModSettingsScreen() {
         <Card key={s.id} style={{ paddingVertical: 0 }}>
           <RowLink
             title={s.name}
-            subtitle="правила, разделы, порог шагов, код"
+            subtitle={s.myRole === 'owner' ? 'правила, команда, нормы, код' : 'вы в команде · код и состав команды'}
             onPress={() => router.push({ pathname: '/mod/stream-settings/[id]', params: { id: s.id } })}
           />
         </Card>
       ))}
-      <Small style={{ fontSize: 12 }}>
-        Позже здесь появятся: команда модераторов, физнормативы, сроки целей и панель анализов.
-      </Small>
       <Card style={{ paddingVertical: 0 }}>
         <AppVersionRow />
       </Card>

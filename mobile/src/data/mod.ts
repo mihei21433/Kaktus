@@ -7,7 +7,10 @@ import { Stream } from './types';
 
 export type MemberLabel = 'new' | 'on_plan' | 'behind' | 'no_reports';
 
+export type StreamRole = 'owner' | 'moderator';
+
 export type StreamSummary = Stream & {
+  myRole: StreamRole;
   requireApproval: boolean;
   members: number;
   pending: number;
@@ -64,6 +67,40 @@ export type Dossier = {
   goals: { id: string; title: string; color: string; result: string; custom: boolean; progress: number }[];
   interim: { id: string; goalId: string; horizon: string; text: string; target: number | null; unit: string | null; progress: number }[];
 };
+
+export type TeamMember = { userId: string; role: StreamRole; name: string; contact: string | null; addedAt: string; isMe: boolean };
+export type Team = { myRole: StreamRole; members: TeamMember[] };
+
+export type Range = { lo?: number; hi?: number };
+type Norms = { norm?: Range; female?: Range | null; male?: Range | null };
+/** Показатель анализов в настройках потока: общая норма и норма потока. */
+export type IndicatorNorm = {
+  id: string;
+  group: string;
+  name: string;
+  unit: string;
+  bySex: boolean;
+  cycle: boolean;
+  off: boolean;
+  changed: boolean;
+  default: Norms;
+  current: Norms;
+};
+
+const num = (x: number) => String(x).replace('.', ',');
+/** «4,1 – 6», «< 5,6», «> 1»; пустая норма — по фазе цикла. */
+export function rangeLabel(r: Range | null | undefined): string {
+  if (!r) return 'по фазе цикла';
+  if (r.lo !== undefined && r.hi !== undefined) return `${num(r.lo)} – ${num(r.hi)}`;
+  if (r.hi !== undefined) return `< ${num(r.hi)}`;
+  if (r.lo !== undefined) return `> ${num(r.lo)}`;
+  return '—';
+}
+
+export function normsLabel(n: Norms): string {
+  if (n.norm) return rangeLabel(n.norm);
+  return `ж ${rangeLabel(n.female)} · м ${rangeLabel(n.male)}`;
+}
 
 export type Broadcast = { id: string; text: string; recipients: number; createdAt: string };
 

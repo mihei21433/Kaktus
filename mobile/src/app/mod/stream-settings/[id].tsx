@@ -3,23 +3,25 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Share, Text, TextInput, View } from 'react-native';
 
+import { FitnessNormsCard } from '@/components/fitness-norms';
 import { LoadState } from '@/components/mod-ui';
+import { TeamCard } from '@/components/stream-team';
 import { api, ApiError } from '@/data/api';
-import { useQuery } from '@/data/mod';
+import { StreamRole, useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
 import { Stream } from '@/data/types';
-import { Button, Caption, Card, Chip, ConfirmDialog, Header, Screen, Small, Toggle, ui } from '@/ui';
+import { Button, Caption, Card, Chip, ConfirmDialog, Header, RowLink, Screen, Small, Toggle, ui } from '@/ui';
 import { addDays, formatDayMonth, plural, todayKey } from '@/lib/date';
 import { colors, font } from '@/theme';
 
-type Settings = Stream & { requireApproval: boolean; targetIndex: number };
+type Settings = Stream & { requireApproval: boolean; targetIndex: number; myRole: StreamRole };
 type ModuleKey = keyof Stream['modules'];
 
 const MODULES: { key: ModuleKey; title: string; sub: string }[] = [
   { key: 'statements', title: 'Утренние заявления', sub: 'текстом · ежедневно' },
   { key: 'steps', title: 'Шаги и физнормативы', sub: 'порог и нормативы потока' },
   { key: 'goals', title: 'Цели по срокам', sub: 'день, неделя, 1 и 3 месяца' },
-  { key: 'analyses', title: 'Анализы и индекс здоровья', sub: 'появятся на следующем этапе' },
+  { key: 'analyses', title: 'Анализы и индекс здоровья', sub: 'замеры, нормы, индекс' },
 ];
 
 export default function StreamSettingsScreen() {
@@ -72,10 +74,21 @@ export default function StreamSettingsScreen() {
                   })
                 }
               />
-              <Button title="Новый код" variant="secondary" small style={{ flex: 1 }} onPress={() => setNewCode(true)} />
+              {data.myRole === 'owner' ? (
+                <Button title="Новый код" variant="secondary" small style={{ flex: 1 }} onPress={() => setNewCode(true)} />
+              ) : null}
             </View>
           </Card>
 
+          <Caption>Команда модераторов</Caption>
+          <TeamCard streamId={id} />
+
+          {data.myRole !== 'owner' ? (
+            <Card borderColor="#5A4520" background={colors.orangeDim}>
+              <Small color={colors.text}>Правила, нормы, замеры и напоминания потока меняет владелец — {data.moderator}.</Small>
+            </Card>
+          ) : (
+          <>
           <Caption>Правила потока</Caption>
           <Card style={{ gap: 14 }}>
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
@@ -111,8 +124,18 @@ export default function StreamSettingsScreen() {
             </Small>
           </Card>
 
+          <Caption>Физнормативы</Caption>
+          <FitnessNormsCard streamId={id} norms={data.norms} onSaved={reload} />
+
           <Caption>Замеры анализов</Caption>
           <MeasurementsCard streamId={id} targetIndex={data.targetIndex} onTarget={(v) => patch({ targetIndex: v })} />
+          <Card style={{ paddingVertical: 0 }}>
+            <RowLink
+              title="Нормы анализов"
+              subtitle="свои границы для потока, выключить ненужные показатели"
+              onPress={() => router.push({ pathname: '/mod/indicators/[id]', params: { id } })}
+            />
+          </Card>
 
           <Caption>Напоминания</Caption>
           <RemindersCard
@@ -143,9 +166,8 @@ export default function StreamSettingsScreen() {
           <Card borderColor="#5A4520" background={colors.orangeDim}>
             <Small color={colors.text}>Выключенный модуль исчезает у участников. Данные сохраняются.</Small>
           </Card>
-          <Text style={[font.body, { color: colors.textMuted, fontSize: 12 }]}>
-            Физнормативы, сроки целей и шаблоны настроек — в следующих версиях.
-          </Text>
+          </>
+          )}
 
           <ConfirmDialog
             visible={!!turningOff}

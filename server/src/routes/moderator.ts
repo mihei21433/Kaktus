@@ -2,6 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { requireModerator, requireOwner, requireStreamAccess, streamRole } from '../access.js';
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
@@ -11,18 +12,10 @@ import { streamCode as newStreamCode } from '../lib/crypto.js';
 import { memberStats, MemberLabel } from '../stats.js';
 import { logAccess } from './analyses.js';
 import { createStream, seedMemberGoals, STREAM_SELECT, StreamRow, streamView } from '../streams.js';
+import { findOrCreateUser } from '../users.js';
+import { randomBytes } from 'node:crypto';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-async function requireModerator(q: Queryable, userId: string) {
-  const [u] = await q.query<{ is_moderator: boolean }>('select is_moderator from users where id = $1', [userId]);
-  if (!u?.is_moderator) throw forbidden('Раздел доступен только модераторам');
-}
-
-async function requireStreamAccess(q: Queryable, userId: string, streamId: string) {
-  const [r] = await q.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [streamId, userId]);
-  if (!r) throw notFound('Поток не найден');
-}
 
 type Decision = 'approve' | 'reject' | 'block' | 'unblock';
 const TRANSITIONS: Record<Decision, { from: string[]; to: string }> = {
@@ -78,15 +71,15 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
 
   app.get('/mod/streams', async (req) => {
     await requireModerator(db, req.userId);
-    const rows = await db.query<StreamRow & { members: number; pending: number }>(
-      `${STREAM_SELECT.replace('from streams s', `, (select count(*)::int from memberships m where m.stream_id = s.id and m.status in ('approved','blocked')) as members,
+    const rows = await db.query<StreamRow & { members: number; pending: number; my_role: string }>(
+      `${STREAM_SELECT.replace('from streams s', `, sm.role as my_role, (select count(*)::int from memberships m where m.stream_id = s.id and m.status in ('approved','blocked')) as members,
          (select count(*)::int from memberships m where m.stream_id = s.id and m.status = 'pending') as pending
        from streams s`)}
        join stream_moderators sm on sm.stream_id = s.id and sm.user_id = $1
        order by s.created_at desc`,
       [req.userId],
     );
-    return rows.map((r) => ({ ...streamView(r), members: r.members, pending: r.pending }));
+    return rows.map((r) => ({ ...streamView(r), myRole: r.my_role, members: r.members, pending: r.pending }));
   });
 
   app.get('/mod/streams/:id/memberships', async (req) => {
@@ -121,8 +114,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
   /* ---------- Этап 4: кабинет модератора ---------- */
 
   const modStreams = (userId: string) =>
-    db.query<StreamRow & { require_approval: boolean; created_at: Date }>(
-      `${STREAM_SELECT.replace('from streams s', ', s.created_at from streams s')}
+    db.query<StreamRow & { require_approval: boolean; created_at: Date; my_role: string }>(
+      `${STREAM_SELECT.replace('from streams s', ', s.created_at, sm.role as my_role from streams s')}
        join stream_moderators sm on sm.stream_id = s.id and sm.user_id = $1
        order by s.created_at desc`,
       [userId],
@@ -156,7 +149,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       );
       totalMembers += members.length;
       attention += counts.behind + counts.no_reports;
-      out.push({ ...streamView(s), requireApproval: s.require_approval, members: members.length, pending, counts });
+      out.push({ ...streamView(s), myRole: s.my_role, requireApproval: s.require_approval, members: members.length, pending, counts });
     }
     return { streams: out, totals: { members: totalMembers, attention } };
   });
@@ -186,9 +179,9 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
   app.get('/mod/streams/:id', async (req) => {
     await requireModerator(db, req.userId);
     const { id } = parse(z.object({ id: zId }), req.params);
-    await requireStreamAccess(db, req.userId, id);
+    const myRole = await streamRole(db, req.userId, id);
     const [s] = await db.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.id = $1`, [id]);
-    return { ...streamView(s), requireApproval: s.require_approval };
+    return { ...streamView(s), requireApproval: s.require_approval, myRole };
   });
 
   app.get('/mod/streams/:id/members', async (req) => {
@@ -367,7 +360,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       }),
       req.body,
     );
-    await requireStreamAccess(db, req.userId, id);
+    await requireOwner(db, req.userId, id);
     await db.query(
       `update streams set
          name = coalesce($2, name),
@@ -388,13 +381,13 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       ],
     );
     const [s] = await db.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.id = $1`, [id]);
-    return { ...streamView(s), requireApproval: s.require_approval };
+    return { ...streamView(s), requireApproval: s.require_approval, myRole: 'owner' };
   });
 
   app.post('/mod/streams/:id/new-code', async (req) => {
     await requireModerator(db, req.userId);
     const { id } = parse(z.object({ id: zId }), req.params);
-    await requireStreamAccess(db, req.userId, id);
+    await requireOwner(db, req.userId, id);
     for (let i = 0; i < 5; i++) {
       try {
         const [r] = await db.query<{ code: string }>('update streams set code = $2 where id = $1 returning code', [id, newStreamCode()]);
@@ -404,5 +397,97 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       }
     }
     throw new Error('Не удалось создать новый код');
+  });
+
+  /* ---------- Физнормативы потока ---------- */
+
+  app.put('/mod/streams/:id/norms', async (req) => {
+    await requireModerator(db, req.userId);
+    const { id } = parse(z.object({ id: zId }), req.params);
+    const b = parse(
+      z.object({
+        norms: z
+          .array(
+            z.object({
+              id: z.string().regex(/^[a-z0-9_-]{1,40}$/).optional(),
+              name: zText(40).min(1),
+              unit: zText(12).default(''),
+              norm: z.number().positive().max(100_000),
+            }),
+          )
+          .max(8, 'Не больше 8 нормативов'),
+      }),
+      req.body,
+    );
+    await requireOwner(db, req.userId, id);
+    // У старых нормативов сохраняем id — к нему привязаны уже внесённые результаты
+    const seen = new Set<string>();
+    const norms = b.norms.map((n) => {
+      let nid = n.id ?? `n_${randomBytes(4).toString('hex')}`;
+      if (seen.has(nid)) nid = `n_${randomBytes(4).toString('hex')}`;
+      seen.add(nid);
+      return { id: nid, name: n.name.trim(), unit: n.unit.trim(), norm: n.norm };
+    });
+    await db.query('update streams set norms = $2::jsonb where id = $1', [id, JSON.stringify(norms)]);
+    return { norms };
+  });
+
+  /* ---------- Команда модераторов ---------- */
+
+  async function team(streamId: string, me: string) {
+    const rows = await db.query<{ user_id: string; role: 'owner' | 'moderator'; name: string; phone: string | null; email: string | null; added_at: Date }>(
+      `select sm.user_id, sm.role, u.name, u.phone, u.email, sm.added_at
+       from stream_moderators sm join users u on u.id = sm.user_id
+       where sm.stream_id = $1 order by sm.role = 'owner' desc, sm.added_at`,
+      [streamId],
+    );
+    return rows.map((r) => ({
+      userId: r.user_id,
+      role: r.role,
+      name: r.name || r.phone || r.email || 'Модератор',
+      contact: r.phone ?? r.email,
+      addedAt: r.added_at,
+      isMe: r.user_id === me,
+    }));
+  }
+
+  app.get('/mod/streams/:id/team', async (req) => {
+    await requireModerator(db, req.userId);
+    const { id } = parse(z.object({ id: zId }), req.params);
+    const myRole = await streamRole(db, req.userId, id);
+    return { myRole, members: await team(id, req.userId) };
+  });
+
+  app.post('/mod/streams/:id/team', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    await requireModerator(db, req.userId);
+    const { id } = parse(z.object({ id: zId }), req.params);
+    const b = parse(z.object({ contact: zText(254).min(3), name: zText(80).optional() }), req.body);
+    await requireOwner(db, req.userId, id);
+    const added = await db.tx(async (q) => {
+      const userId = await findOrCreateUser(q, b.contact);
+      const [already] = await q.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [id, userId]);
+      if (already) throw conflict('already_in_team', 'Этот человек уже в команде потока');
+      const [member] = await q.query(`select 1 from memberships where user_id = $1 and status in ('pending', 'approved', 'blocked')`, [userId]);
+      if (member) throw conflict('is_participant', 'Этот человек сейчас участник потока. Модератором он сможет стать, когда выйдет из потока');
+      await q.query(`insert into stream_moderators (stream_id, user_id, role, added_by) values ($1, $2, 'moderator', $3)`, [id, userId, req.userId]);
+      await q.query(`update users set is_moderator = true, name = case when name = '' then coalesce($2, '') else name end where id = $1`, [userId, b.name?.trim() || null]);
+      return userId;
+    });
+    const [s] = await db.query<{ name: string }>('select name from streams where id = $1', [id]);
+    await push.notifyUser(added, 'Вы в команде модераторов', `Вас добавили модератором потока «${s.name}»`, { type: 'team' });
+    return { members: await team(id, req.userId) };
+  });
+
+  /** Владелец убирает модератора; модератор может выйти из команды сам. */
+  app.delete('/mod/streams/:id/team/:userId', async (req) => {
+    await requireModerator(db, req.userId);
+    const p = parse(z.object({ id: zId, userId: zId }), req.params);
+    const myRole = await streamRole(db, req.userId, p.id);
+    if (p.userId !== req.userId && myRole !== 'owner') throw forbidden('Это может только владелец потока');
+    const [target] = await db.query<{ role: string }>('select role from stream_moderators where stream_id = $1 and user_id = $2', [p.id, p.userId]);
+    if (!target) throw notFound('Модератора нет в команде');
+    if (target.role === 'owner') throw conflict('owner', 'Владельца потока убрать нельзя');
+    await db.query('delete from stream_moderators where stream_id = $1 and user_id = $2', [p.id, p.userId]);
+    return { ok: true };
   });
 }

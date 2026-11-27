@@ -126,3 +126,21 @@ export function scoreOf(value: number, r: Range | null): number | null {
   if (r.hi !== undefined && value > r.hi) d = value - r.hi;
   return Math.max(0, 1 - d / (width || 1));
 }
+
+/* ---------- Нормы потока: модератор может поменять норму или выключить показатель ---------- */
+
+export type Override = { off?: boolean; norm?: Range; female?: Range; male?: Range };
+export type Overrides = Record<string, Override>;
+
+/** Показатель с нормами потока поверх общих. */
+export function withOverride(ind: Indicator, ov: Override | undefined): Indicator {
+  if (!ov) return ind;
+  if (ind.norm) return ov.norm ? { ...ind, norm: ov.norm } : ind;
+  return { ...ind, female: ov.female ?? ind.female, male: ov.male ?? ind.male };
+}
+
+/** Каталог потока: нормы модератора применены, выключенные показатели убраны. */
+export function streamCatalog(overrides: unknown): Indicator[] {
+  const o = (overrides ?? {}) as Overrides;
+  return CATALOG.filter((i) => !o[i.id]?.off).map((i) => withOverride(i, o[i.id]));
+}

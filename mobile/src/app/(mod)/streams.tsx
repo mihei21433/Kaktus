@@ -51,7 +51,7 @@ export default function StreamsScreen() {
                       {s.members} {plural(s.members, ['участник', 'участника', 'участников'])} · код {s.code}
                     </Small>
                   </View>
-                  <Tag label="АКТИВЕН" color={colors.green} />
+                  {s.myRole === 'moderator' ? <Tag label="В КОМАНДЕ" color={colors.blue} /> : <Tag label="АКТИВЕН" color={colors.green} />}
                 </View>
                 {s.members ? (
                   <>

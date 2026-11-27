@@ -59,6 +59,6 @@ export type PushData = { type?: string; kind?: string; status?: string };
 export function screenFor(data: PushData): '/statement' | '/today' | '/' | null {
   if (data.type === 'reminder') return data.kind === 'morning' ? '/statement' : '/today';
   if (data.type === 'task') return '/today';
-  if (data.type === 'membership') return '/';
+  if (data.type === 'membership' || data.type === 'team') return '/';
   return null;
 }

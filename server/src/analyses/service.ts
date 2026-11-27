@@ -3,7 +3,7 @@ import type { Queryable } from '../db/index.js';
 import { todayIn } from '../lib/time.js';
 import { memberStats } from '../stats.js';
 import type { StreamRow } from '../streams.js';
-import { CATALOG, GROUPS, normFor, normLabel, type Range, scoreOf, type Sex, statusOf, type Status } from './catalog.js';
+import { GROUPS, normFor, normLabel, type Range, scoreOf, type Sex, statusOf, type Status, streamCatalog } from './catalog.js';
 
 /** Веса блоков индекса здоровья (макет «Панель анализов»). */
 export const WEIGHTS = { analyses: 0.6, fitness: 0.25, regularity: 0.15 };
@@ -12,7 +12,7 @@ type MeasurementRow = { id: string; name: string; opens_on: string; deadline: st
 
 export async function buildAnalyses(q: Queryable, membership: { id: string; decided_at: Date | null; requested_at: Date }, stream: StreamRow & { target_index?: number }, sex: Sex | null) {
   const today = todayIn(stream.timezone);
-  const catalog = CATALOG.map((i) => {
+  const catalog = streamCatalog(stream.indicator_norms).map((i) => {
     const norm = normFor(i, sex);
     return { id: i.id, group: i.group, name: i.name, unit: i.unit, norm, normLabel: normLabel(norm, i, sex) };
   });
@@ -42,7 +42,7 @@ export async function buildAnalyses(q: Queryable, membership: { id: string; deci
 
   const measurements = ms.map((m) => {
     const vals: Record<string, { value: number; comparator: string; status: Status }> = {};
-    const summary = { filled: 0, normal: 0, border: 0, deviation: 0, unknown: 0, total: CATALOG.length };
+    const summary = { filled: 0, normal: 0, border: 0, deviation: 0, unknown: 0, total: catalog.length };
     let scoreSum = 0;
     let scored = 0;
     for (const ind of catalog) {
