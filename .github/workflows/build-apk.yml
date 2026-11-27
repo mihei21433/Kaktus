@@ -38,7 +38,6 @@ jobs:
           node -e '
             const b = JSON.parse(require("fs").readFileSync("build.json", "utf8"))[0];
             const url = b.artifacts?.buildUrl ?? b.artifacts?.applicationArchiveUrl;
-            const page = `https://expo.dev/accounts/${b.project?.ownerAccount?.name ?? ""}/projects/${b.project?.slug ?? "kaktus"}/builds/${b.id}`;
-            console.log("APK:", url); console.log("Страница сборки:", page);
-            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### APK готов\n\n- Скачать: ${url}\n- Страница сборки (QR-код): ${page}\n`);
+            console.log("APK:", url); console.log("Сборка:", b.id);
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### APK готов\n\n- Скачать: ${url}\n- Все сборки и QR-коды: expo.dev → проект kaktus → Builds\n`);
           '
