@@ -15,6 +15,7 @@ docs/     инструкции
 - **С сервером на своём компьютере** — [docs/local-run.md](docs/local-run.md).
 - **На настоящем сервере в Казахстане** — [docs/deploy.md](docs/deploy.md).
 - **Обновить приложение без нового APK** — [docs/updates.md](docs/updates.md).
+- **iPhone** — веб-версия и TestFlight: [docs/ios.md](docs/ios.md).
 - **Пилот с настоящими участниками** — [docs/pilot.md](docs/pilot.md): сервер, сборка
   приложения для Android и iPhone, пуш-уведомления, первый поток.
 
