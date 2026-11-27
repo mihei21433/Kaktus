@@ -53,6 +53,11 @@ export default function ProfileScreen() {
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <RowLink title="Журнал доступа к моим данным" subtitle="когда модератор открывал данные о здоровье" onPress={() => router.push('/access-log')} />
       </Card>
+      {!state.demo ? (
+        <Card style={{ paddingVertical: 0 }}>
+          <RowLink title="Код входа на другом телефоне" subtitle="личный код вместо SMS" onPress={() => router.push('/my-code')} />
+        </Card>
+      ) : null}
       <Card style={{ paddingVertical: 0 }}>
         <RowLink title="Согласие на обработку данных" onPress={() => router.push('/consent-settings')} />
       </Card>
@@ -83,7 +88,7 @@ export default function ProfileScreen() {
       <ConfirmDialog
         visible={logout}
         title={state.demo ? 'Выйти из демо?' : 'Выйти из аккаунта?'}
-        message={state.demo ? 'Демо-данные удалятся с телефона.' : 'Данные останутся на сервере — войти можно снова по номеру или почте.'}
+        message={state.demo ? 'Демо-данные удалятся с телефона.' : 'Данные останутся на сервере. Войти снова — по личному коду входа: сохраните его заранее («Код входа на другом телефоне» выше).'}
         confirmLabel="Выйти"
         onCancel={() => setLogout(false)}
         onConfirm={async () => {

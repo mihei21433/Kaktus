@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
+import { normalizeCode } from '../lib/crypto.js';
 import { ApiError, conflict, notFound } from '../lib/errors.js';
 import { parse, zText } from '../lib/validate.js';
 import { buildAnalyses, shortSummary } from '../analyses/service.js';
@@ -24,6 +25,7 @@ type UserRow = {
   consent_accepted_at: Date | null;
   ai_transfer: boolean;
   is_moderator: boolean;
+  login_code_set_at: Date | null;
 };
 
 /** Полное состояние участника в формате мобильного приложения (AppState). */
@@ -33,7 +35,7 @@ export async function buildState(q: Queryable, userId: string) {
   const stream = m ? await loadStream(q, m.stream_id) : null;
 
   const state = {
-    account: { phone: u.phone, email: u.email, isModerator: u.is_moderator },
+    account: { phone: u.phone, email: u.email, isModerator: u.is_moderator, loginCodeSetAt: u.login_code_set_at },
     consent: u.consent_version
       ? { version: u.consent_version, acceptedAt: u.consent_accepted_at, aiTransfer: u.ai_transfer }
       : null,
@@ -122,7 +124,7 @@ export async function buildState(q: Queryable, userId: string) {
   return state;
 }
 
-export async function meRoutes(app: FastifyInstance, { db, files }: Deps) {
+export async function meRoutes(app: FastifyInstance, { db, files, auth }: Deps) {
   app.get('/me/state', async (req) => buildState(db, req.userId));
 
   /* --- Согласие --- */
@@ -160,26 +162,15 @@ export async function meRoutes(app: FastifyInstance, { db, files }: Deps) {
     return { ok: true };
   });
 
+  /** Новый личный код входа (для другого телефона). Показывается один раз; старый перестаёт работать. */
+  app.post('/me/login-code', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    return { loginCode: await db.tx((q) => auth.setLoginCode(q, req.userId)) };
+  });
+
   /* --- Поток --- */
   app.post('/me/join', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const b = parse(z.object({ code: z.string().trim().min(4).max(12) }), req.body);
-    return db.tx(async (q) => {
-      const [u] = await q.query<{ consent_version: string | null }>('select consent_version from users where id = $1', [req.userId]);
-      if (!u.consent_version) throw conflict('no_consent', 'Сначала примите согласие на обработку данных');
-      const cur = await currentMembership(q, req.userId);
-      if (cur && ['pending', 'approved', 'blocked'].includes(cur.status)) {
-        throw conflict('already_member', 'Вы уже подали заявку или состоите в потоке');
-      }
-      const [s] = await q.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.code = $1`, [b.code.toUpperCase()]);
-      if (!s) throw notFound('Такого кода нет. Проверьте буквы или спросите код у модератора');
-      const status = s.require_approval ? 'pending' : 'approved';
-      const [m] = await q.query<{ id: string }>(
-        `insert into memberships (stream_id, user_id, status, decided_at) values ($1, $2, $3, case when $3 = 'approved' then now() end) returning id`,
-        [s.id, req.userId, status],
-      );
-      if (status === 'approved') await seedMemberGoals(q, m.id, s.id);
-      return { status, stream: streamView(s) };
-    });
+    return db.tx((q) => joinStream(q, req.userId, b.code));
   });
 
   app.get('/me/membership', async (req) => {
@@ -224,4 +215,23 @@ export async function meRoutes(app: FastifyInstance, { db, files }: Deps) {
     return { ok: true };
   });
 
+}
+
+/** Вступление в поток по коду: заявка (или сразу участие, если подтверждение выключено). */
+export async function joinStream(q: Queryable, userId: string, code: string) {
+  const [u] = await q.query<{ consent_version: string | null }>('select consent_version from users where id = $1', [userId]);
+  if (!u.consent_version) throw conflict('no_consent', 'Сначала примите согласие на обработку данных');
+  const cur = await currentMembership(q, userId);
+  if (cur && ['pending', 'approved', 'blocked'].includes(cur.status)) {
+    throw conflict('already_member', 'Вы уже подали заявку или состоите в потоке');
+  }
+  const [s] = await q.query<StreamRow & { require_approval: boolean }>(`${STREAM_SELECT} where s.code = $1`, [normalizeCode(code)]);
+  if (!s) throw notFound('Такого кода нет. Проверьте буквы или спросите код у модератора');
+  const status = s.require_approval ? 'pending' : 'approved';
+  const [m] = await q.query<{ id: string }>(
+    `insert into memberships (stream_id, user_id, status, decided_at) values ($1, $2, $3, case when $3 = 'approved' then now() end) returning id`,
+    [s.id, userId, status],
+  );
+  if (status === 'approved') await seedMemberGoals(q, m.id, s.id);
+  return { status, stream: streamView(s) };
 }

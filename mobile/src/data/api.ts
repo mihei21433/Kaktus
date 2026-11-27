@@ -143,16 +143,17 @@ export async function upload<T = unknown>(path: string, body: Blob, contentType:
 
 /* --- Вход --- */
 
-export type Channel = 'sms' | 'email';
-
-export function requestCode(channel: Channel, target: string): Promise<{ target: string; devCode?: string }> {
-  return raw('POST', '/v1/auth/request-code', { channel, target });
+/** Новый участник без SMS: код потока + имя. Возвращает личный код входа — показать один раз. */
+export async function joinWithStreamCode(streamCode: string, name: string, consentVersion: string) {
+  const t = await raw('POST', '/v1/auth/join', { streamCode, name, consentVersion });
+  setSession({ accessToken: t.accessToken, refreshToken: t.refreshToken });
+  return t as { loginCode: string; membership: string };
 }
 
-export async function verifyCode(channel: Channel, target: string, code: string) {
-  const t = await raw('POST', '/v1/auth/verify', { channel, target, code });
+/** Вход по личному коду входа. */
+export async function loginWithCode(code: string) {
+  const t = await raw('POST', '/v1/auth/code-login', { code });
   setSession({ accessToken: t.accessToken, refreshToken: t.refreshToken });
-  return t as { isNew: boolean };
 }
 
 export async function logout() {

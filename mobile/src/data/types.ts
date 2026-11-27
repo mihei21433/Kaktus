@@ -102,7 +102,7 @@ export type Statement = {
   localUri?: string;
 };
 
-export type Account = { phone: string | null; email: string | null; isModerator: boolean };
+export type Account = { phone: string | null; email: string | null; isModerator: boolean; loginCodeSetAt?: string | null };
 
 export type AppState = {
   /** Демо-режим: всё хранится только на телефоне, сервер не используется. */

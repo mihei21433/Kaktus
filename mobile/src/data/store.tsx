@@ -66,12 +66,16 @@ function useActions({ setState, get, setError, setLoggedIn }: Env) {
       refresh,
 
       /* --- Вход --- */
-      requestCode: api.requestCode,
-      async verifyCode(channel: api.Channel, target: string, code: string) {
-        await api.verifyCode(channel, target, code);
+      /** Вступление без SMS: аккаунт, заявка в поток и личный код входа. */
+      async joinWithStreamCode(code: string, name: string) {
+        const r = await api.joinWithStreamCode(code, name, get().consent?.version ?? CONSENT_VERSION);
         setLoggedIn(true);
-        const local = get().consent;
-        if (local) await api.api('POST', '/v1/me/consent', { version: local.version }).catch(() => {});
+        await refresh();
+        return r.loginCode;
+      },
+      async loginWithCode(code: string) {
+        await api.loginWithCode(code);
+        setLoggedIn(true);
         await refresh();
         return get();
       },

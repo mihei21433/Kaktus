@@ -458,24 +458,53 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     return { myRole, members: await team(id, req.userId) };
   });
 
+  /** Добавить модератора: по имени (вход по личному коду) или по телефону/почте существующего человека. */
   app.post('/mod/streams/:id/team', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     await requireModerator(db, req.userId);
     const { id } = parse(z.object({ id: zId }), req.params);
-    const b = parse(z.object({ contact: zText(254).min(3), name: zText(80).optional() }), req.body);
+    const b = parse(z.object({ name: zText(80).optional(), contact: zText(254).optional() }), req.body);
+    if (!b.contact?.trim() && !b.name?.trim()) throw badRequest('no_name', 'Укажите имя модератора');
     await requireOwner(db, req.userId, id);
     const added = await db.tx(async (q) => {
-      const userId = await findOrCreateUser(q, b.contact);
-      const [already] = await q.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [id, userId]);
-      if (already) throw conflict('already_in_team', 'Этот человек уже в команде потока');
-      const [member] = await q.query(`select 1 from memberships where user_id = $1 and status in ('pending', 'approved', 'blocked')`, [userId]);
-      if (member) throw conflict('is_participant', 'Этот человек сейчас участник потока. Модератором он сможет стать, когда выйдет из потока');
+      let userId: string;
+      let loginCode: string | null = null;
+      if (b.contact?.trim()) {
+        userId = await findOrCreateUser(q, b.contact);
+        const [already] = await q.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [id, userId]);
+        if (already) throw conflict('already_in_team', 'Этот человек уже в команде потока');
+        const [member] = await q.query(`select 1 from memberships where user_id = $1 and status in ('pending', 'approved', 'blocked')`, [userId]);
+        if (member) throw conflict('is_participant', 'Этот человек сейчас участник потока. Модератором он сможет стать, когда выйдет из потока');
+        await q.query(`update users set is_moderator = true, name = case when name = '' then coalesce($2, '') else name end where id = $1`, [userId, b.name?.trim() || null]);
+        const [u] = await q.query<{ login_code_hash: string | null }>('select login_code_hash from users where id = $1', [userId]);
+        if (!u.login_code_hash) loginCode = await auth.setLoginCode(q, userId);
+      } else {
+        ({ userId, loginCode } = await auth.createCodeUser(q, { name: b.name!.trim(), isModerator: true }));
+      }
       await q.query(`insert into stream_moderators (stream_id, user_id, role, added_by) values ($1, $2, 'moderator', $3)`, [id, userId, req.userId]);
-      await q.query(`update users set is_moderator = true, name = case when name = '' then coalesce($2, '') else name end where id = $1`, [userId, b.name?.trim() || null]);
-      return userId;
+      return { userId, loginCode };
     });
     const [s] = await db.query<{ name: string }>('select name from streams where id = $1', [id]);
-    await push.notifyUser(added, 'Вы в команде модераторов', `Вас добавили модератором потока «${s.name}»`, { type: 'team' });
-    return { members: await team(id, req.userId) };
+    await push.notifyUser(added.userId, 'Вы в команде модераторов', `Вас добавили модератором потока «${s.name}»`, { type: 'team' });
+    return { members: await team(id, req.userId), loginCode: added.loginCode };
+  });
+
+  /** Новый код входа модератору команды (потерял телефон, забыл код): старый и все входы перестают работать. */
+  app.post('/mod/streams/:id/team/:userId/login-code', async (req) => {
+    await requireModerator(db, req.userId);
+    const p = parse(z.object({ id: zId, userId: zId }), req.params);
+    await requireOwner(db, req.userId, p.id);
+    const [t] = await db.query('select 1 from stream_moderators where stream_id = $1 and user_id = $2', [p.id, p.userId]);
+    if (!t) throw notFound('Модератора нет в команде');
+    if (p.userId === req.userId) throw badRequest('self', 'Свой код меняйте в «Настройки → Код входа»');
+    return { loginCode: await db.tx((q) => auth.setLoginCode(q, p.userId, { revokeSessions: true })) };
+  });
+
+  /** Новый код входа участнику: потерял код или телефон. Старый код и вход на других телефонах перестают работать. */
+  app.post('/mod/members/:id/login-code', async (req) => {
+    await requireModerator(db, req.userId);
+    const { id } = parse(z.object({ id: zId }), req.params);
+    const { m } = await memberAccess(req.userId, id);
+    return { loginCode: await db.tx((q) => auth.setLoginCode(q, m.user_id, { revokeSessions: true })) };
   });
 
   /** Владелец убирает модератора; модератор может выйти из команды сам. */

@@ -5,6 +5,7 @@
  *   npm run admin -- streams
  *   npm run admin -- requests [код потока]
  *   npm run admin -- approve <id заявки> | reject <id заявки>
+ *   npm run admin -- login-code +77771234567   (новый код входа; можно имя: login-code "Марина")
  */
 import { mkdir } from 'node:fs/promises';
 
@@ -14,7 +15,8 @@ import { assertNotLocked } from './db/lock.js';
 import { todayIn } from './lib/time.js';
 import { decideMembership } from './routes/moderator.js';
 import { createStream } from './streams.js';
-import { findOrCreateUser } from './users.js';
+import { findOrCreateUser, parseContact } from './users.js';
+import { AuthService } from './auth.js';
 
 const cfg = loadConfig();
 if (!cfg.databaseUrl) {
@@ -30,6 +32,13 @@ const db = await openDb({ url: cfg.databaseUrl, dataDir: cfg.dataDir });
 await migrate(db);
 
 const [cmd, ...args] = process.argv.slice(2);
+const auth = new AuthService(db, cfg, { sendSms: async () => {}, sendEmail: async () => {} });
+
+/** Новый личный код входа: старый и все входы на других устройствах перестают работать. */
+async function printLoginCode(userId: string, who: string) {
+  const code = await db.tx((q) => auth.setLoginCode(q, userId, { revokeSessions: true }));
+  console.log(`Код входа для ${who}: ${code}  (вводится в приложении: «Уже есть аккаунт — войти»)`);
+}
 
 try {
   switch (cmd) {
@@ -39,6 +48,20 @@ try {
       const id = await findOrCreateUser(db, contact);
       await db.query(`update users set is_moderator = true, name = coalesce(nullif($2, ''), name) where id = $1`, [id, name ?? '']);
       console.log(`Готово: ${contact} — модератор`);
+      await printLoginCode(id, contact);
+      break;
+    }
+    case 'login-code': {
+      const [who] = args;
+      if (!who) throw new Error('Пример: login-code +77771234567  или  login-code "Марина Ковалёва"');
+      let rows: { id: string; name: string }[] = [];
+      if (/\d/.test(who) || who.includes('@')) {
+        const c = parseContact(who);
+        rows = await db.query(`select id, name from users where ${c.col} = $1`, [c.value]);
+      }
+      else rows = await db.query('select id, name from users where lower(name) = lower($1)', [who.trim()]);
+      if (rows.length !== 1) throw new Error(rows.length ? 'Таких имён несколько — укажите телефон' : 'Пользователь не найден');
+      await printLoginCode(rows[0].id, who);
       break;
     }
     case 'create-stream': {

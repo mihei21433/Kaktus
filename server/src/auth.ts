@@ -2,8 +2,8 @@ import { jwtVerify, SignJWT } from 'jose';
 
 import type { Config } from './config.js';
 import type { Db, Queryable } from './db/index.js';
-import { ApiError, tooMany } from './lib/errors.js';
-import { hmac, otpCode, randomToken, safeEqual } from './lib/crypto.js';
+import { ApiError, badRequest, tooMany } from './lib/errors.js';
+import { hmac, loginCode, normalizeCode, otpCode, randomToken, safeEqual } from './lib/crypto.js';
 import type { Channel } from './lib/identity.js';
 import type { Messenger } from './providers/index.js';
 
@@ -128,6 +128,49 @@ export class AuthService {
     } catch {
       throw new ApiError(403, 'link_expired', 'Ссылка на запись устарела');
     }
+  }
+
+  private loginHash(code: string) {
+    return hmac(this.cfg.jwtSecret, `login:${normalizeCode(code)}`);
+  }
+
+  /** Новый личный код входа. Старый перестаёт работать; с revoke — выходят и все устройства. */
+  async setLoginCode(q: Queryable, userId: string, opts: { revokeSessions?: boolean } = {}): Promise<string> {
+    for (let i = 0; ; i++) {
+      const code = loginCode();
+      try {
+        await q.query('update users set login_code_hash = $2, login_code_set_at = now() where id = $1', [userId, this.loginHash(code)]);
+        if (opts.revokeSessions) await q.query('update refresh_tokens set revoked_at = now() where user_id = $1 and revoked_at is null', [userId]);
+        return code;
+      } catch (e) {
+        if (i < 3 && String((e as Error).message).includes('login_code_hash')) continue;
+        throw e;
+      }
+    }
+  }
+
+  /** Вход по личному коду. */
+  async loginWithCode(code: string): Promise<Tokens & { userId: string }> {
+    const norm = normalizeCode(code);
+    if (norm.length !== 10) throw badRequest('bad_code', 'Код входа — 10 знаков, например K7F3Q-9QX2M');
+    return this.db.tx(async (q) => {
+      const [u] = await q.query<{ id: string }>('select id from users where login_code_hash = $1', [this.loginHash(norm)]);
+      if (!u) throw new ApiError(401, 'wrong_code', 'Такого кода входа нет. Проверьте его или попросите у модератора новый');
+      return { ...(await this.issue(q, u.id)), userId: u.id };
+    });
+  }
+
+  /** Новый пользователь без телефона и почты: вход только по личному коду. */
+  async createCodeUser(q: Queryable, fields: { name: string; consentVersion?: string; isModerator?: boolean }): Promise<{ userId: string; loginCode: string }> {
+    const [u] = await q.query<{ id: string }>(
+      `insert into users (name, consent_version, consent_accepted_at, is_moderator) values ($1, $2, case when $2::text is null then null else now() end, $3) returning id`,
+      [fields.name, fields.consentVersion ?? null, !!fields.isModerator],
+    );
+    return { userId: u.id, loginCode: await this.setLoginCode(q, u.id) };
+  }
+
+  async issueFor(q: Queryable, userId: string): Promise<Tokens> {
+    return this.issue(q, userId);
   }
 
   private async issue(q: Queryable, userId: string): Promise<Tokens> {

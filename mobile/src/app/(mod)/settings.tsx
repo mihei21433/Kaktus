@@ -20,7 +20,7 @@ export default function ModSettingsScreen() {
       <Card style={{ gap: 4 }}>
         <Caption>Аккаунт модератора</Caption>
         <Text style={font.title}>{state.profile.name || 'Без имени'}</Text>
-        <Small>{account?.phone ?? account?.email}</Small>
+        {account?.phone || account?.email ? <Small>{account.phone ?? account.email}</Small> : null}
       </Card>
       <Caption>Потоки</Caption>
       {!data ? <LoadState loading={loading} error={error} onRetry={reload} /> : null}
@@ -34,13 +34,14 @@ export default function ModSettingsScreen() {
         </Card>
       ))}
       <Card style={{ paddingVertical: 0 }}>
+        <RowLink title="Код входа" subtitle="личный код для входа на другом телефоне, вместо SMS" onPress={() => router.push('/my-code')} />
         <AppVersionRow />
       </Card>
       <RowLink title="Выйти из аккаунта" color={colors.red} onPress={() => setLogout(true)} />
       <ConfirmDialog
         visible={logout}
         title="Выйти из аккаунта?"
-        message="Данные потоков останутся на сервере — войти можно снова по номеру или почте."
+        message="Данные потоков останутся на сервере. Войти снова — по личному коду входа: сохраните его заранее («Код входа» выше)."
         confirmLabel="Выйти"
         onCancel={() => setLogout(false)}
         onConfirm={async () => {

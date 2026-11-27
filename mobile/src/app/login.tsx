@@ -1,28 +1,32 @@
-import { router, useLocalSearchParams } from 'expo-router';
+/** Вход в существующий аккаунт по личному коду входа (новый телефон, после выхода). Без SMS. */
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, TextInput } from 'react-native';
 
-import { Channel } from '@/data/api';
 import { useApp } from '@/data/store';
-import { Button, Field, Header, Screen, Segmented, Small } from '@/ui';
+import { Button, Caption, Header, LinkButton, Screen, Small } from '@/ui';
 import { colors, font } from '@/theme';
+
+/** «k7f3q9qx2m» → «K7F3Q-9QX2M» */
+function formatCode(v: string) {
+  const s = v.toUpperCase().replace(/[^A-ZА-ЯЁ0-9]/g, '').slice(0, 10);
+  return s.length > 5 ? `${s.slice(0, 5)}-${s.slice(5)}` : s;
+}
 
 export default function LoginScreen() {
   const { actions } = useApp();
-  const { next } = useLocalSearchParams<{ next?: string }>();
-  const [channel, setChannel] = useState<Channel>('sms');
-  const [value, setValue] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const ready = channel === 'sms' ? value.replace(/\D/g, '').length >= 10 : /\S+@\S+\.\S+/.test(value);
+  const ready = code.replace('-', '').length === 10;
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      const r = await actions.requestCode(channel, value);
-      router.push({ pathname: '/login-code', params: { channel, target: r.target, devCode: r.devCode ?? '', next: next ?? '' } });
+      await actions.loginWithCode(code);
+      if (router.canDismiss()) router.dismissAll();
+      router.replace('/');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -31,49 +35,40 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen header={<Header onBack={() => router.back()} />}>
-      <Text style={font.h1}>Вход</Text>
-      <Small>Пришлём код для входа. Аккаунт создастся автоматически при первом входе.</Small>
-      <Segmented<Channel>
-        value={channel}
-        onChange={(c) => {
-          setChannel(c);
-          setValue('');
+    <Screen header={<Header onBack={() => (router.canGoBack() ? router.back() : router.replace('/start'))} />}>
+      <Text style={font.h1}>Вход по коду</Text>
+      <Small>Введите личный код входа — 10 знаков. Он есть в профиле на старом телефоне (участник: «Профиль», модератор: «Настройки»).</Small>
+      <Caption>Личный код входа</Caption>
+      <TextInput
+        value={code}
+        onChangeText={(v) => {
+          setCode(formatCode(v));
           setError(null);
         }}
-        options={[
-          { value: 'sms', label: 'Телефон' },
-          { value: 'email', label: 'Почта' },
-        ]}
+        placeholder="K7F3Q-9QX2M"
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        autoFocus
+        onSubmitEditing={() => ready && submit()}
+        style={{
+          height: 56,
+          color: colors.text,
+          backgroundColor: colors.input,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: error ? colors.red : colors.border,
+          paddingHorizontal: 16,
+          fontSize: 24,
+          fontWeight: '700',
+          letterSpacing: 3,
+          textAlign: 'center',
+        }}
       />
-      {channel === 'sms' ? (
-        <Field
-          key="sms"
-          label="Номер телефона"
-          value={value}
-          onChangeText={setValue}
-          placeholder="+7 777 123 45 67"
-          keyboardType="phone-pad"
-          textContentType="telephoneNumber"
-          autoComplete="tel"
-          autoFocus
-        />
-      ) : (
-        <Field
-          key="email"
-          label="Электронная почта"
-          value={value}
-          onChangeText={setValue}
-          placeholder="name@mail.kz"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          textContentType="emailAddress"
-          autoComplete="email"
-          autoFocus
-        />
-      )}
       {error ? <Text style={{ color: colors.red, fontSize: 13 }}>{error}</Text> : null}
-      <Button title={busy ? 'Отправляем…' : 'Получить код'} disabled={!ready || busy} onPress={submit} />
+      <Button title={busy ? 'Входим…' : 'Войти'} disabled={!ready || busy} onPress={submit} />
+      <Small style={{ fontSize: 12 }}>Потеряли код? Попросите модератора потока выдать новый — старый при этом перестанет работать.</Small>
+      <LinkButton title="Ещё нет аккаунта — вступить по коду потока" color={colors.blue} onPress={() => router.replace('/join')} />
     </Screen>
   );
 }

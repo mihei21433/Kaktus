@@ -14,6 +14,7 @@ import { mmss } from '@/lib/audio';
 import { formatDayMonth, formatNumber, formatTime, plural } from '@/lib/date';
 import { Button, Caption, Card, Chip, ConfirmDialog, Header, Ionicons, ProgressBar, Screen, Small, Stat, Tag, ui } from '@/ui';
 import { colors, font } from '@/theme';
+import { CodeDialog } from '@/components/code-box';
 
 type Tab = 'overview' | 'tasks' | 'goals' | 'steps' | 'statements' | 'analyses';
 const TABS: { value: Tab; label: string }[] = [
@@ -33,6 +34,16 @@ export default function DossierScreen() {
   const { data, error, loading, reload } = useQuery<Dossier>(`/v1/mod/members/${id}`);
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [confirmCode, setConfirmCode] = useState(false);
+  const [newCode, setNewCode] = useState<string | null>(null);
+
+  const issueCode = async () => {
+    try {
+      setNewCode((await api<{ loginCode: string }>('POST', `/v1/mod/members/${id}/login-code`)).loginCode);
+    } catch (e) {
+      showError(e instanceof ApiError ? e.message : 'Не удалось выдать код');
+    }
+  };
 
   const toggleBlock = async () => {
     if (!data) return;
@@ -59,7 +70,8 @@ export default function DossierScreen() {
                 <LabelTag label={data.stats.label} blocked={data.member.blocked} />
               </View>
               <Small style={{ fontSize: 12 }}>
-                {data.stats.dayInStream === 1 ? 'первый день в потоке' : `${data.stats.dayInStream}-й день в потоке`} · {data.member.contact}
+                {data.stats.dayInStream === 1 ? 'первый день в потоке' : `${data.stats.dayInStream}-й день в потоке`}
+                {data.member.contact ? ` · ${data.member.contact}` : ''}
               </Small>
             </View>
           </View>
@@ -79,10 +91,30 @@ export default function DossierScreen() {
           {!data.member.blocked ? (
             <Button title="Поставить задачу" variant="blue" onPress={() => router.push({ pathname: '/mod/assign/[id]', params: { id } })} />
           ) : null}
+          <Button title="Выдать новый код входа" variant="secondary" onPress={() => setConfirmCode(true)} />
           <Button
             title={data.member.blocked ? 'Разблокировать участника' : 'Заблокировать участника'}
             variant="secondary"
             onPress={() => (data.member.blocked ? toggleBlock() : setConfirmBlock(true))}
+          />
+          <ConfirmDialog
+            visible={confirmCode}
+            title="Выдать новый код входа?"
+            message={`Для случая, когда ${data.member.name} потерял(а) код или телефон. Старый код перестанет работать, а на всех телефонах участник выйдет из аккаунта. Данные сохранятся.`}
+            confirmLabel="Выдать код"
+            destructive={false}
+            onCancel={() => setConfirmCode(false)}
+            onConfirm={() => {
+              setConfirmCode(false);
+              void issueCode();
+            }}
+          />
+          <CodeDialog
+            code={newCode}
+            title={`Код входа: ${data.member.name}`}
+            text="Передайте код участнику. Он введёт его в приложении: «Уже есть аккаунт — войти по коду»."
+            shareText={`Ваш новый код входа в «Кактус»: ${newCode}. Откройте приложение → «Уже есть аккаунт — войти по коду».`}
+            onClose={() => setNewCode(null)}
           />
           <ConfirmDialog
             visible={confirmBlock}

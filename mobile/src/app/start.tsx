@@ -21,12 +21,12 @@ export default function StartScreen() {
         <>
           <Button
             title="Вступить по коду"
-            onPress={() => router.push(loggedIn ? '/join' : { pathname: '/login', params: { next: 'join' } })}
+            onPress={() => router.push('/join')}
           />
           <Small style={{ textAlign: 'center', fontSize: 12 }}>Код или ссылку даёт модератор потока</Small>
           {!loggedIn ? (
             <View style={{ alignItems: 'center', marginTop: 4 }}>
-              <LinkButton title="Уже есть аккаунт — войти" color={colors.blue} onPress={() => router.push('/login')} />
+              <LinkButton title="Уже есть аккаунт — войти по коду" color={colors.blue} onPress={() => router.push('/login')} />
             </View>
           ) : null}
           <View style={{ alignItems: 'center', marginTop: 4 }}>
