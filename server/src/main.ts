@@ -6,6 +6,7 @@ import { migrate, openDb } from './db/index.js';
 import { assertNotLocked, holdLock } from './db/lock.js';
 import { createPush } from './push.js';
 import { runReminders } from './reminders.js';
+import { ocrAvailable } from './recognition/ocr.js';
 
 const cfg = loadConfig();
 if (!cfg.databaseUrl) {
@@ -17,6 +18,7 @@ const db = await openDb({ url: cfg.databaseUrl, dataDir: cfg.dataDir });
 const app = await buildApp(db, cfg);
 
 await migrate(db, (m) => app.log.info(m));
+void ocrAvailable().then((ok) => app.log.info(ok ? 'Распознавание бланков: включено (Tesseract)' : 'Распознавание бланков: Tesseract не найден — кнопка «Распознать» вернёт ошибку'));
 app.log.info(
   `База: ${db.kind === 'pglite' ? `встроенная (${cfg.dataDir})` : 'PostgreSQL'}; SMS: ${cfg.sms.provider}; почта: ${cfg.email.provider}` +
     (cfg.devReturnCodes ? '; коды входа возвращаются в ответе (тестовый режим)' : ''),

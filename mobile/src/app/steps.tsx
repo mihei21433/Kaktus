@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
+import { errorText, recognizeSteps } from '@/data/analyses';
 import { useApp } from '@/data/store';
 import { formatNumber, todayKey } from '@/lib/date';
 import { Button, Caption, Card, Chip, Header, LinkButton, ProgressBar, Screen, Small, ui } from '@/ui';
@@ -10,12 +11,30 @@ import { colors, font } from '@/theme';
 const PRESETS = [6000, 8000, 10000, 12000];
 
 export default function StepsScreen() {
-  const { state, actions } = useApp();
+  const { state, actions, showError } = useApp();
   const stream = state.membership.stream!;
   const today = todayKey();
   const saved = state.steps[today];
   const [value, setValue] = useState(saved ? String(saved) : '');
   const [fit, setFit] = useState<Record<string, string>>({});
+  const [reading, setReading] = useState(false);
+  const [recognized, setRecognized] = useState<string | null>(null);
+
+  const fromScreenshot = async () => {
+    setReading(true);
+    try {
+      const r = await recognizeSteps();
+      if (!r) return;
+      if (r.steps) {
+        setValue(String(r.steps));
+        setRecognized(`Распознано со скриншота: ${formatNumber(r.steps)}. Проверьте число и нажмите «Отправить шаги».`);
+      } else setRecognized('На скриншоте не нашли число шагов. Попробуйте скриншот главного экрана шагомера или введите вручную.');
+    } catch (e) {
+      showError(errorText(e, 'Не получилось распознать скриншот'));
+    } finally {
+      setReading(false);
+    }
+  };
   const n = Number(value) || 0;
   const threshold = stream.stepsThreshold;
 
@@ -48,14 +67,6 @@ export default function StepsScreen() {
           <Small style={{ fontSize: 12 }}>вручную</Small>
         </Card>
       ) : null}
-      {!state.consent?.aiTransfer ? (
-        <Card borderColor="#5A4520" background={colors.orangeDim}>
-          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
-            <Text style={{ color: colors.orange }}>! </Text>
-            Распознавание ИИ выключено в профиле. Укажите количество шагов вручную — всё остальное работает как обычно.
-          </Text>
-        </Card>
-      ) : null}
       <Caption>Количество шагов</Caption>
       <View style={[ui.row, { backgroundColor: colors.input, borderRadius: 12, borderWidth: 1, borderColor: colors.green, paddingHorizontal: 14 }]}>
         <TextInput
@@ -68,6 +79,10 @@ export default function StepsScreen() {
         />
         <Small>шагов</Small>
       </View>
+      {!state.demo ? (
+        <Button title={reading ? 'Читаем скриншот…' : 'Распознать со скриншота'} variant="secondary" small disabled={reading} onPress={fromScreenshot} />
+      ) : null}
+      {recognized ? <Small style={{ fontSize: 12 }} color={colors.green}>{recognized}</Small> : null}
       <View style={ui.row}>
         {PRESETS.map((p) => (
           <View key={p} style={{ flex: 1 }}>

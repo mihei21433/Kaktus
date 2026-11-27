@@ -110,6 +110,11 @@ export class FileStore {
     return stat(this.abs(rel)).then(() => true, () => false);
   }
 
+  /** Путь на диске — для распознавания текста (файл читает Tesseract). */
+  absPath(rel: string): string {
+    return this.abs(rel);
+  }
+
   open(rel: string) {
     const ext = path.extname(rel).slice(1);
     return { stream: createReadStream(this.abs(rel)), type: SERVE_TYPE[ext] ?? 'application/octet-stream' };

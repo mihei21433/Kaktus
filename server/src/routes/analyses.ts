@@ -8,6 +8,8 @@ import { requireModerator, requireOwner, requireStreamAccess } from '../access.j
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { BLANK_TYPES } from '../files.js';
+import { parseBlank, type Found } from '../recognition/blank.js';
+import { fileText, OcrError } from '../recognition/ocr.js';
 import { ApiError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { addDays, todayIn } from '../lib/time.js';
 import { parse, zDate, zId, zText } from '../lib/validate.js';
@@ -121,6 +123,75 @@ export async function analysesRoutes(app: FastifyInstance, { db, files, auth }: 
       [membership.id, mid],
     );
     return { ok: true, filled: n };
+  });
+
+  /**
+   * Распознать бланки замера: текст читается на нашем сервере, значения НЕ сохраняются —
+   * участник проверяет их на экране «Проверка распознанного» и сохраняет сам.
+   */
+  app.post('/me/measurements/:mid/recognize', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    const { mid } = parse(z.object({ mid: zId }), req.params);
+    const { membership, stream } = await myMeasurement(req.userId, mid, true);
+    const blanks = await db.query<{ id: string; file_path: string; file_name: string }>(
+      'select id, file_path, file_name from blanks where membership_id = $1 and measurement_id = $2 order by created_at',
+      [membership.id, mid],
+    );
+    if (!blanks.length) throw badRequest('no_blanks', 'Сначала загрузите фото или PDF бланка');
+    const catalog = streamCatalog(stream.indicator_norms);
+    const merged = new Map<string, Found>();
+    const report: { id: string; fileName: string; found: number; error?: string }[] = [];
+    for (const b of blanks) {
+      try {
+        const text = await fileText(files.absPath(b.file_path), b.file_path.split('.').pop()!.toLowerCase());
+        const found = parseBlank(text).filter((f) => catalog.some((c) => c.id === f.indicatorId));
+        for (const f of found) if (!merged.has(f.indicatorId)) merged.set(f.indicatorId, f);
+        report.push({ id: b.id, fileName: b.file_name, found: found.length });
+      } catch (e) {
+        if (!(e instanceof OcrError)) req.log.error(e, 'распознавание бланка');
+        report.push({ id: b.id, fileName: b.file_name, found: 0, error: e instanceof OcrError ? e.message : 'Не получилось прочитать файл' });
+      }
+    }
+    if (report.every((r) => r.error) && report[0].error === 'Распознавание на сервере не настроено') throw new ApiError(503, 'ocr_unavailable', report[0].error);
+    const saved = await db.query<{ indicator_id: string; value: unknown; comparator: string }>(
+      'select indicator_id, value, comparator from analysis_values where membership_id = $1 and measurement_id = $2',
+      [membership.id, mid],
+    );
+    const found = catalog
+      .filter((c) => merged.has(c.id))
+      .map((c) => {
+        const f = merged.get(c.id)!;
+        const cur = saved.find((s) => s.indicator_id === c.id);
+        return { ...f, name: c.name, unit: c.unit, current: cur ? { value: Number(cur.value), comparator: cur.comparator } : null };
+      });
+    return { found, blanks: report, total: catalog.length };
+  });
+
+  /** Сохранить несколько значений разом (после проверки распознанного). */
+  app.put('/me/measurements/:mid/values', async (req) => {
+    const { mid } = parse(z.object({ mid: zId }), req.params);
+    const b = parse(
+      z.object({
+        values: z
+          .array(z.object({ indicatorId: z.string().max(40), value: z.number().min(0).max(1e6), comparator: z.enum(['=', '<', '>']).default('=') }))
+          .min(1)
+          .max(60),
+      }),
+      req.body,
+    );
+    const { membership, stream } = await myMeasurement(req.userId, mid, true);
+    const catalog = streamCatalog(stream.indicator_norms);
+    const bad = b.values.find((v) => !catalog.some((c) => c.id === v.indicatorId));
+    if (bad) throw notFound(`Такого показателя в потоке нет: ${bad.indicatorId}`);
+    await db.tx(async (q) => {
+      for (const v of b.values) {
+        await q.query(
+          `insert into analysis_values (membership_id, measurement_id, indicator_id, value, comparator) values ($1, $2, $3, $4, $5)
+           on conflict (membership_id, measurement_id, indicator_id) do update set value = excluded.value, comparator = excluded.comparator, updated_at = now()`,
+          [membership.id, mid, v.indicatorId, v.value, v.comparator],
+        );
+      }
+    });
+    return { ok: true, saved: b.values.length };
   });
 
   /** Кто из модераторов и когда открывал мои данные о здоровье. */

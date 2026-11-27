@@ -83,6 +83,39 @@ export async function uploadBlank(measurementId: string, f: Picked) {
   });
 }
 
+/** Значение, найденное на бланке. Сервер его не сохраняет — участник проверяет и сохраняет сам. */
+export type RecognizedValue = {
+  indicatorId: string;
+  name: string;
+  unit: string;
+  value: number;
+  comparator: '=' | '<' | '>';
+  line: string;
+  check: boolean;
+  note?: string;
+  current: { value: number; comparator: string } | null;
+};
+export type Recognition = {
+  found: RecognizedValue[];
+  blanks: { id: string; fileName: string; found: number; error?: string }[];
+  total: number;
+};
+
+export const recognizeBlanks = (mid: string) => api<Recognition>('POST', `/v1/me/measurements/${mid}/recognize`);
+
+export const saveValues = (mid: string, values: { indicatorId: string; value: number; comparator: string }[]) =>
+  api('PUT', `/v1/me/measurements/${mid}/values`, { values });
+
+/** Шаги со скриншота шагомера: картинка не сохраняется. */
+export async function recognizeSteps(): Promise<{ steps: number | null; candidates: number[] } | null> {
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+  if (r.canceled || !r.assets[0]) return null;
+  const a = r.assets[0];
+  const blob = await (await fetch(a.uri)).blob();
+  const type = a.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+  return upload('/v1/me/steps/recognize', blob, type, { method: 'POST' });
+}
+
 /** Открыть бланк: сервер выдаёт ссылку на 10 минут, телефон показывает файл. */
 export async function openBlank(linkPath: string) {
   const { url } = await api<{ url: string }>('GET', linkPath);

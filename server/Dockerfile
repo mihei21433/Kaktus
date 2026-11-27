@@ -10,6 +10,8 @@ RUN npm run build && npm prune --omit=dev
 # Запуск
 FROM node:22-alpine
 ENV NODE_ENV=production
+# Распознавание бланков и скриншотов шагов на нашем сервере: Tesseract (русский, английский) и poppler для PDF
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-rus tesseract-ocr-data-eng poppler-utils
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

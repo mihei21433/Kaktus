@@ -8,6 +8,8 @@ import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { AUDIO_TYPES } from '../files.js';
 import { ApiError, badRequest, forbidden, notFound } from '../lib/errors.js';
+import { parseSteps } from '../recognition/blank.js';
+import { imageText, OcrError } from '../recognition/ocr.js';
 import { addDays, todayIn } from '../lib/time.js';
 import { parse, zDate, zId, zText } from '../lib/validate.js';
 import { requireMember } from '../membership.js';
@@ -176,6 +178,21 @@ export async function dataRoutes(app: FastifyInstance, { db, files, auth, cfg }:
       [membership.id, date, b.count],
     );
     return { ok: true };
+  });
+
+  /** Шаги со скриншота шагомера: картинка не сохраняется, число участник подтверждает сам. */
+  app.post('/me/steps/recognize', { bodyLimit: 15 * 1024 * 1024, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    await requireMember(db, req.userId);
+    const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new ApiError(415, 'bad_file', 'Нужен скриншот: JPG или PNG');
+    const body = req.body as Buffer;
+    if (!Buffer.isBuffer(body) || body.length < 100) throw badRequest('empty_file', 'Файл пустой');
+    try {
+      return parseSteps(await imageText(body));
+    } catch (e) {
+      if (e instanceof OcrError) throw new ApiError(e.code === 'unavailable' ? 503 : 415, e.code === 'unavailable' ? 'ocr_unavailable' : 'bad_file', e.message);
+      throw e;
+    }
   });
 
   app.put('/me/fitness/:date/:normId', async (req) => {

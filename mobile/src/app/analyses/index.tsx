@@ -113,11 +113,18 @@ export default function AnalysesHub() {
                   </Card>
                 ))
               )}
-              <Card borderColor="#5A4520" background={colors.orangeDim}>
-                <Small color={colors.text}>Распознавание ИИ пока не подключено — перенесите значения с бланка вручную.</Small>
-              </Card>
+              {current.blanks.length ? (
+                <>
+                  <Button title="Распознать бланки" onPress={() => router.push({ pathname: '/analyses/recognize', params: { mid: current.id } })} />
+                  <Small style={{ fontSize: 12 }}>
+                    Программа прочитает значения с бланков, а вы проверите их перед сохранением. Текст читается на сервере программы в
+                    Казахстане и никуда не передаётся.
+                  </Small>
+                </>
+              ) : null}
               <Button
-                title={current.submittedAt ? 'Изменить значения' : 'Ввести значения'}
+                title={current.submittedAt ? 'Изменить значения' : 'Ввести значения вручную'}
+                variant={current.blanks.length ? 'secondary' : 'primary'}
                 onPress={() => router.push({ pathname: '/analyses/entry', params: { mid: current.id } })}
               />
             </>

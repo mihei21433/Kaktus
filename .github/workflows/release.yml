@@ -33,12 +33,18 @@ jobs:
           cache-dependency-path: |
             server/package-lock.json
             mobile/package-lock.json
+      - name: Распознавание текста для тестов (Tesseract)
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr tesseract-ocr-rus poppler-utils
       - name: Сервер — типы и тесты
         working-directory: server
         run: |
           npm ci
           npx tsc --noEmit -p .
           npm test
+      - name: Сервер — сборка Docker-образа (как на сервере)
+        run: |
+          docker build -t kaktus-api server
+          docker run --rm --entrypoint sh kaktus-api -c 'tesseract --list-langs | grep -qx rus && command -v pdftotext >/dev/null && node -e "require(\"sharp\")" && echo "образ в порядке"'
       - name: Приложение — типы и линтер
         working-directory: mobile
         run: |
