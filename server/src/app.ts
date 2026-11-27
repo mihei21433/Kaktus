@@ -79,6 +79,14 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
       .send(f.stream);
   });
 
+  // Фото профиля: ссылку знают только те, кому её отдал сервер (участник, его модераторы, команда)
+  app.get('/v1/files/avatar/:file', async (req, reply) => {
+    const { file } = req.params as { file: string };
+    if (!/^[a-f0-9]{32}\.jpg$/.test(file) || !(await deps.files.exists(`avatars/${file}`))) throw new ApiError(404, 'not_found', 'Фото не найдено');
+    const f = deps.files.open(`avatars/${file}`);
+    return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', 'private, max-age=86400, immutable').send(f.stream);
+  });
+
   // Аудио по подписанной ссылке (без заголовка авторизации — его не умеет передавать плеер)
   app.get('/v1/audio/:token', async (req, reply) => {
     const { token } = req.params as { token: string };

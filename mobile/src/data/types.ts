@@ -47,8 +47,12 @@ export type Consent = { version: string; acceptedAt: string; aiTransfer: boolean
 
 export type Profile = {
   name: string;
+  firstName?: string;
+  lastName?: string;
   /** Телефон для связи (указан при регистрации, без подтверждения) */
   phone?: string;
+  /** Фото профиля: путь на сервере, /v1/files/avatar/… */
+  avatarUrl?: string | null;
   about: string;
   contract: string;
   contractAcceptedAt?: string;

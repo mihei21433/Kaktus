@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { AppVersionRow } from '@/components/app-updates';
+import { Avatar } from '@/components/mod-ui';
 import { useApp } from '@/data/store';
 import { Caption, Card, ConfirmDialog, Header, RowLink, Screen } from '@/ui';
 import { colors, font } from '@/theme';
@@ -14,22 +15,24 @@ export default function ProfileScreen() {
   const { profile } = state;
   const stream = state.membership.stream!;
   const [leave, setLeave] = useState(false);
-  const initial = (profile.name || '?')[0].toUpperCase();
 
   return (
     <Screen inTabs header={<Header title="Профиль" rightLabel="Изменить" onRight={() => router.push('/profile-edit')} />}>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-        <View style={{ width: 56, height: 56, borderRadius: 14, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: colors.greenText }}>{initial}</Text>
-        </View>
+        <Avatar name={profile.name || '?'} size={56} uri={profile.avatarUrl} />
         <View style={{ flex: 1 }}>
           <Text style={font.h2}>{profile.name || 'Без имени'}</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
             {stream.name}
-            {state.demo ? ' · демо' : account ? ` · ${account.phone ?? account.email}` : ''}
+            {state.demo ? ' · демо' : profile.phone ? ` · ${profile.phone}` : account?.phone ? ` · ${account.phone}` : ''}
           </Text>
         </View>
       </View>
+      {!state.demo ? (
+        <Card style={{ paddingVertical: 0 }}>
+          <RowLink title="Аккаунт" subtitle="фото, имя, фамилия, телефон" onPress={() => router.push('/account')} />
+        </Card>
+      ) : null}
       <Card style={{ gap: 6 }}>
         <Caption color={colors.green}>Личный контракт</Caption>
         <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{profile.contract || 'Не заполнен'}</Text>

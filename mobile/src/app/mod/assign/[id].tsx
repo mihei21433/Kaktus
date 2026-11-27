@@ -54,7 +54,7 @@ export default function AssignTaskScreen() {
       {data ? (
         <>
           <Card style={[ui.row, { gap: 10 }]}>
-            <Avatar name={data.member.name} />
+            <Avatar name={data.member.name} uri={data.member.avatarUrl} />
             <View>
               <Text style={font.title}>{data.member.name}</Text>
               <Small style={{ fontSize: 12 }}>{data.stream.name}</Small>

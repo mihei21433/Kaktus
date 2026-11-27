@@ -12,6 +12,7 @@ import { streamCode as newStreamCode } from '../lib/crypto.js';
 import { memberStats, MemberLabel } from '../stats.js';
 import { logAccess } from './analyses.js';
 import { createStream, seedMemberGoals, STREAM_SELECT, StreamRow, streamView } from '../streams.js';
+import { avatarUrl } from '../people.js';
 import { findOrCreateUser } from '../users.js';
 import { randomBytes } from 'node:crypto';
 
@@ -89,7 +90,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     await requireStreamAccess(db, req.userId, id);
     return db.query(
       `select m.id, m.status, m.requested_at as "requestedAt", m.decided_at as "decidedAt",
-              u.name, coalesce(u.phone, u.contact_phone) as phone, u.email
+              u.name, coalesce(u.contact_phone, u.phone) as phone, u.email
        from memberships m join users u on u.id = m.user_id
        where m.stream_id = $1 and ($2::text is null or m.status = $2)
        order by m.requested_at desc`,
@@ -122,8 +123,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     );
 
   async function streamMembers(streamId: string) {
-    return db.query<{ id: string; status: string; decided_at: Date | null; requested_at: Date; name: string; phone: string | null; email: string | null }>(
-      `select m.id, m.status, m.decided_at, m.requested_at, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email
+    return db.query<{ id: string; status: string; decided_at: Date | null; requested_at: Date; name: string; phone: string | null; email: string | null; avatar_path: string | null }>(
+      `select m.id, m.status, m.decided_at, m.requested_at, u.name, coalesce(u.contact_phone, u.phone) as phone, u.email, u.avatar_path
        from memberships m join users u on u.id = m.user_id
        where m.stream_id = $1 and m.status in ('approved', 'blocked') order by u.name, m.requested_at`,
       [streamId],
@@ -157,8 +158,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
   app.get('/mod/requests', async (req) => {
     await requireModerator(db, req.userId);
     const { status } = parse(z.object({ status: z.enum(['pending', 'approved', 'rejected']).default('pending') }), req.query);
-    const rows = await db.query<{ id: string; status: string; requested_at: Date; decided_at: Date | null; name: string; phone: string | null; email: string | null; stream_name: string; stream_code: string }>(
-      `select m.id, m.status, m.requested_at, m.decided_at, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email, s.name as stream_name, s.code as stream_code
+    const rows = await db.query<{ id: string; status: string; requested_at: Date; decided_at: Date | null; name: string; phone: string | null; email: string | null; avatar_path: string | null; stream_name: string; stream_code: string }>(
+      `select m.id, m.status, m.requested_at, m.decided_at, u.name, coalesce(u.contact_phone, u.phone) as phone, u.email, u.avatar_path, s.name as stream_name, s.code as stream_code
        from memberships m join users u on u.id = m.user_id join streams s on s.id = m.stream_id
        join stream_moderators sm on sm.stream_id = s.id and sm.user_id = $1
        where m.status = $2 order by coalesce(m.decided_at, m.requested_at) desc limit 200`,
@@ -169,6 +170,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       status: r.status,
       name: displayName(r),
       contact: r.phone ?? r.email,
+      avatarUrl: avatarUrl(r.avatar_path),
       streamName: r.stream_name,
       streamCode: r.stream_code,
       requestedAt: r.requested_at,
@@ -196,6 +198,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       return {
         id: m.id,
         name: displayName(m),
+        avatarUrl: avatarUrl(m.avatar_path),
         blocked: m.status === 'blocked',
         label: st.label,
         today: st.today,
@@ -223,8 +226,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     const { m, s } = await memberAccess(req.userId, id);
     // досье содержит шаги и физнормативы — данные о здоровье
     await logAccess(db, req.userId, m.id, 'dossier');
-    const [u] = await db.query<{ name: string; phone: string | null; email: string | null; about: string; contract: string }>(
-      'select name, coalesce(phone, contact_phone) as phone, email, about, contract from users where id = $1',
+    const [u] = await db.query<{ name: string; phone: string | null; email: string | null; about: string; contract: string; avatar_path: string | null }>(
+      'select name, coalesce(contact_phone, phone) as phone, email, about, contract, avatar_path from users where id = $1',
       [m.user_id],
     );
     const st = (await memberStats(db, [m], s)).get(m.id)!;
@@ -241,6 +244,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
         id: m.id,
         name: displayName(u),
         contact: u.phone ?? u.email,
+        avatarUrl: avatarUrl(u.avatar_path),
         about: u.about,
         contract: u.contract,
         blocked: m.status === 'blocked',
@@ -435,8 +439,8 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
   /* ---------- Команда модераторов ---------- */
 
   async function team(streamId: string, me: string) {
-    const rows = await db.query<{ user_id: string; role: 'owner' | 'moderator'; name: string; phone: string | null; email: string | null; added_at: Date }>(
-      `select sm.user_id, sm.role, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email, sm.added_at
+    const rows = await db.query<{ user_id: string; role: 'owner' | 'moderator'; name: string; phone: string | null; email: string | null; avatar_path: string | null; added_at: Date }>(
+      `select sm.user_id, sm.role, u.name, coalesce(u.contact_phone, u.phone) as phone, u.email, u.avatar_path, sm.added_at
        from stream_moderators sm join users u on u.id = sm.user_id
        where sm.stream_id = $1 order by sm.role = 'owner' desc, sm.added_at`,
       [streamId],
@@ -446,6 +450,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
       role: r.role,
       name: r.name || r.phone || r.email || 'Модератор',
       contact: r.phone ?? r.email,
+      avatarUrl: avatarUrl(r.avatar_path),
       addedAt: r.added_at,
       isMe: r.user_id === me,
     }));

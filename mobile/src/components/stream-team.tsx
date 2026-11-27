@@ -65,7 +65,7 @@ export function TeamCard({ streamId }: { streamId: string }) {
     <Card style={{ gap: 12 }}>
       {data?.members.map((m) => (
         <View key={m.userId} style={ui.row}>
-          <Avatar name={m.name} size={34} />
+          <Avatar name={m.name} size={34} uri={m.avatarUrl} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontSize: 15 }}>
               {m.name}

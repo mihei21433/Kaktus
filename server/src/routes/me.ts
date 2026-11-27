@@ -6,6 +6,8 @@ import type { Queryable } from '../db/index.js';
 import { normalizeCode } from '../lib/crypto.js';
 import { ApiError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { normalizePhone } from '../lib/identity.js';
+import { avatarUrl, fullName, splitName } from '../people.js';
+import sharp from 'sharp';
 import { parse, zText } from '../lib/validate.js';
 import { buildAnalyses, shortSummary } from '../analyses/service.js';
 import { currentMembership, loadStream } from '../membership.js';
@@ -28,6 +30,9 @@ type UserRow = {
   is_moderator: boolean;
   login_code_set_at: Date | null;
   contact_phone: string | null;
+  first_name: string;
+  last_name: string;
+  avatar_path: string | null;
 };
 
 /** Полное состояние участника в формате мобильного приложения (AppState). */
@@ -46,6 +51,9 @@ export async function buildState(q: Queryable, userId: string) {
       : { status: 'none', checks: 0 },
     profile: {
       name: u.name,
+      firstName: u.first_name,
+      lastName: u.last_name,
+      avatarUrl: avatarUrl(u.avatar_path),
       phone: u.contact_phone ?? u.phone ?? '',
       about: u.about,
       contract: u.contract,
@@ -146,24 +154,73 @@ export async function meRoutes(app: FastifyInstance, { db, files, auth }: Deps) 
   /* --- Профиль --- */
   app.put('/me/profile', async (req) => {
     const b = parse(
-      z.object({ name: zText(80).optional(), phone: z.string().max(30).optional(), about: zText(300), contract: zText(1000), accepted: z.boolean() }),
+      z.object({
+        name: zText(80).optional(),
+        firstName: zText(40).optional(),
+        lastName: zText(40).optional(),
+        phone: z.string().max(30).optional(),
+        about: zText(300),
+        contract: zText(1000),
+        accepted: z.boolean(),
+      }),
       req.body,
     );
+    if (b.firstName !== undefined) await saveNames(db, req.userId, b.firstName, b.lastName ?? '');
+    else if (b.name?.trim()) {
+      const n = splitName(b.name);
+      await saveNames(db, req.userId, n.first, n.last);
+    }
     if (b.accepted && b.contract.trim().length < 3) throw badRequest('no_contract', 'Напишите личный контракт своими словами');
     if (b.phone?.trim()) await db.query('update users set contact_phone = $2 where id = $1', [req.userId, normalizePhone(b.phone)]);
     await db.query(
       `update users set
-         name = coalesce(nullif($2, ''), name), about = $3,
-         contract = case when contract_accepted_at is null then $4 else contract end,
-         contract_accepted_at = case when $5 then coalesce(contract_accepted_at, now()) else contract_accepted_at end,
+         about = $2,
+         contract = case when contract_accepted_at is null then $3 else contract end,
+         contract_accepted_at = case when $4 then coalesce(contract_accepted_at, now()) else contract_accepted_at end,
          profile_completed = true
        where id = $1`,
-      [req.userId, b.name ?? '', b.about, b.contract, b.accepted],
+      [req.userId, b.about, b.contract, b.accepted],
     );
     return { ok: true };
   });
   app.post('/me/profile/skip', async (req) => {
     await db.query('update users set profile_completed = true where id = $1', [req.userId]);
+    return { ok: true };
+  });
+
+  /** Аккаунт: имя, фамилия, телефон для связи — и у участника, и у модератора. */
+  app.put('/me/account', async (req) => {
+    const b = parse(z.object({ firstName: zText(40), lastName: zText(40).default(''), phone: z.string().max(30).optional() }), req.body);
+    if (!b.firstName.trim()) throw badRequest('no_name', 'Укажите имя');
+    const phone = b.phone?.trim() ? normalizePhone(b.phone) : null;
+    await saveNames(db, req.userId, b.firstName, b.lastName);
+    await db.query('update users set contact_phone = $2 where id = $1', [req.userId, phone]);
+    return { ok: true };
+  });
+
+  /** Фото профиля: обрезаем до квадрата 512×512 и сохраняем JPEG; прежнее фото удаляется. */
+  app.post('/me/avatar', { bodyLimit: 15 * 1024 * 1024, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new ApiError(415, 'bad_file', 'Нужна фотография: JPG или PNG');
+    const body = req.body as Buffer;
+    if (!Buffer.isBuffer(body) || body.length < 100) throw badRequest('empty_file', 'Файл пустой');
+    let jpeg: Buffer;
+    try {
+      jpeg = await sharp(body, { failOn: 'none' }).rotate().resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer();
+    } catch {
+      throw new ApiError(415, 'bad_file', 'Не получилось открыть фото. Попробуйте другое');
+    }
+    const rel = await files.saveAvatar(jpeg);
+    const [old] = await db.query<{ avatar_path: string | null }>('select avatar_path from users where id = $1', [req.userId]);
+    await db.query('update users set avatar_path = $2 where id = $1', [req.userId, rel]);
+    await files.remove(old?.avatar_path);
+    return { avatarUrl: avatarUrl(rel) };
+  });
+
+  app.delete('/me/avatar', async (req) => {
+    const [old] = await db.query<{ avatar_path: string | null }>('select avatar_path from users where id = $1', [req.userId]);
+    await db.query('update users set avatar_path = null where id = $1', [req.userId]);
+    await files.remove(old?.avatar_path);
     return { ok: true };
   });
 
@@ -205,6 +262,8 @@ export async function meRoutes(app: FastifyInstance, { db, files, auth }: Deps) 
     if (owns) throw new ApiError(409, 'owns_streams', 'Сначала передайте свои потоки другому модератору');
     // Файлы (голосовые) удаляем вместе с аккаунтом
     const ms = await db.query<{ id: string }>('select id from memberships where user_id = $1', [req.userId]);
+    const [me] = await db.query<{ avatar_path: string | null }>('select avatar_path from users where id = $1', [req.userId]);
+    await files.remove(me?.avatar_path);
     await db.query('delete from users where id = $1', [req.userId]);
     for (const m of ms) await files.removeMembership(m.id);
     return { ok: true };
@@ -239,4 +298,10 @@ export async function joinStream(q: Queryable, userId: string, code: string) {
   );
   if (status === 'approved') await seedMemberGoals(q, m.id, s.id);
   return { status, stream: streamView(s) };
+}
+
+/** Имя и фамилия; name — «Имя Фамилия» для показа модераторам. */
+export async function saveNames(q: Queryable, userId: string, first: string, last: string) {
+  if (!first.trim()) return;
+  await q.query('update users set first_name = $2, last_name = $3, name = $4 where id = $1', [userId, first.trim(), last.trim(), fullName(first, last)]);
 }

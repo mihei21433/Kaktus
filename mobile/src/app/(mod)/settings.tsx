@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { LoadState } from '@/components/mod-ui';
+import { Avatar, LoadState } from '@/components/mod-ui';
 import { Overview, useQuery } from '@/data/mod';
 import { AppVersionRow } from '@/components/app-updates';
 import { useApp } from '@/data/store';
@@ -17,10 +17,14 @@ export default function ModSettingsScreen() {
 
   return (
     <Screen inTabs header={<Header title="Настройки" />}>
-      <Card style={{ gap: 4 }}>
-        <Caption>Аккаунт модератора</Caption>
-        <Text style={font.title}>{state.profile.name || 'Без имени'}</Text>
-        {account?.phone || account?.email ? <Small>{account.phone ?? account.email}</Small> : null}
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} onPress={() => router.push('/account')}>
+        <Avatar name={state.profile.name || '?'} size={48} uri={state.profile.avatarUrl} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Caption>Аккаунт модератора</Caption>
+          <Text style={font.title}>{state.profile.name || 'Без имени'}</Text>
+          {state.profile.phone || account?.phone || account?.email ? <Small>{state.profile.phone || account?.phone || account?.email}</Small> : null}
+        </View>
+        <Small color={colors.blue}>Изменить</Small>
       </Card>
       <Caption>Потоки</Caption>
       {!data ? <LoadState loading={loading} error={error} onRetry={reload} /> : null}

@@ -52,7 +52,7 @@ export default function RequestsScreen() {
       {data?.map((r) => (
         <Card key={r.id} style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Avatar name={r.name} />
+            <Avatar name={r.name} uri={r.avatarUrl} />
             <View style={{ flex: 1 }}>
               <Text style={font.title}>{r.name}</Text>
               <Small style={{ fontSize: 12 }}>

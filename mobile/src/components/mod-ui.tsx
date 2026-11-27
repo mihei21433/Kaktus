@@ -1,5 +1,7 @@
 import { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
+
+import { API_URL } from '@/data/api';
 
 import { LABELS, MemberLabel } from '@/data/mod';
 import { Card, Small, Tag } from '@/ui';
@@ -22,7 +24,17 @@ export function initials(name: string): string {
   return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
-export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+/** Кружок с фото профиля, а если фото нет — с инициалами. uri — путь с сервера (/v1/files/avatar/…). */
+export function Avatar({ name, size = 36, uri }: { name: string; size?: number; uri?: string | null }) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri: uri.startsWith('http') || uri.startsWith('file:') || uri.startsWith('blob:') ? uri : API_URL + uri }}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.cardAlt }}
+        accessibilityLabel={name}
+      />
+    );
+  }
   return (
     <View
       style={{

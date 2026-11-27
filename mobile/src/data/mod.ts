@@ -24,6 +24,7 @@ export type RequestItem = {
   status: 'pending' | 'approved' | 'rejected';
   name: string;
   contact: string | null;
+  avatarUrl?: string | null;
   streamName: string;
   streamCode: string;
   requestedAt: string;
@@ -33,6 +34,7 @@ export type RequestItem = {
 export type MemberRow = {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   blocked: boolean;
   label: MemberLabel;
   today: { done: number; total: number; steps: number | null; statement: boolean };
@@ -49,7 +51,7 @@ export type DayView = {
 };
 
 export type Dossier = {
-  member: { id: string; name: string; contact: string | null; about: string; contract: string; blocked: boolean; status: string };
+  member: { id: string; name: string; contact: string | null; avatarUrl?: string | null; about: string; contract: string; blocked: boolean; status: string };
   stream: { id: string; name: string; stepsThreshold: number; modules: Stream['modules']; horizons?: StreamHorizon[] };
   stats: {
     label: MemberLabel;
@@ -68,7 +70,7 @@ export type Dossier = {
   interim: { id: string; goalId: string; horizon: string; text: string; target: number | null; unit: string | null; progress: number }[];
 };
 
-export type TeamMember = { userId: string; role: StreamRole; name: string; contact: string | null; addedAt: string; isMe: boolean };
+export type TeamMember = { userId: string; role: StreamRole; name: string; contact: string | null; avatarUrl?: string | null; addedAt: string; isMe: boolean };
 export type Team = { myRole: StreamRole; members: TeamMember[] };
 
 export type Range = { lo?: number; hi?: number };

@@ -168,6 +168,7 @@ function useActions({ setState, get, setError, setLoggedIn }: Env) {
         setState((s) => ({
           ...s,
           profile: {
+            ...s.profile,
             name: p.name ?? s.profile.name,
             phone: p.phone ?? s.profile.phone,
             about: p.about,

@@ -5,6 +5,7 @@ import type { Db, Queryable } from './db/index.js';
 import { ApiError, badRequest, tooMany } from './lib/errors.js';
 import { hmac, loginCode, normalizeCode, otpCode, randomToken, safeEqual } from './lib/crypto.js';
 import type { Channel } from './lib/identity.js';
+import { fullName, splitName } from './people.js';
 import type { Messenger } from './providers/index.js';
 
 export type Tokens = { accessToken: string; refreshToken: string; expiresIn: number };
@@ -161,10 +162,15 @@ export class AuthService {
   }
 
   /** Новый пользователь без телефона и почты: вход только по личному коду. */
-  async createCodeUser(q: Queryable, fields: { name: string; consentVersion?: string; isModerator?: boolean }): Promise<{ userId: string; loginCode: string }> {
+  async createCodeUser(
+    q: Queryable,
+    fields: { name: string; firstName?: string; lastName?: string; consentVersion?: string; isModerator?: boolean },
+  ): Promise<{ userId: string; loginCode: string }> {
+    const n = fields.firstName !== undefined ? { first: fields.firstName.trim(), last: fields.lastName?.trim() ?? '' } : splitName(fields.name);
     const [u] = await q.query<{ id: string }>(
-      `insert into users (name, consent_version, consent_accepted_at, is_moderator) values ($1, $2, case when $2::text is null then null else now() end, $3) returning id`,
-      [fields.name, fields.consentVersion ?? null, !!fields.isModerator],
+      `insert into users (name, first_name, last_name, consent_version, consent_accepted_at, is_moderator)
+       values ($1, $2, $3, $4, case when $4::text is null then null else now() end, $5) returning id`,
+      [fullName(n.first, n.last), n.first, n.last, fields.consentVersion ?? null, !!fields.isModerator],
     );
     return { userId: u.id, loginCode: await this.setLoginCode(q, u.id) };
   }

@@ -54,12 +54,12 @@ export async function authRoutes(app: FastifyInstance, { auth, db }: Deps) {
         // один человек — одна заявка: тот же номер в этом потоке уже есть
         const [dup] = await q.query(
           `select 1 from memberships m join users u on u.id = m.user_id join streams s on s.id = m.stream_id
-           where s.code = $1 and m.status in ('pending', 'approved', 'blocked') and coalesce(u.phone, u.contact_phone) = $2`,
+           where s.code = $1 and m.status in ('pending', 'approved', 'blocked') and $2 in (u.phone, u.contact_phone)`,
           [normalizeCode(b.streamCode), phone],
         );
         if (dup) throw conflict('phone_taken', 'Участник с этим номером уже есть в потоке. Если это вы — войдите по личному коду или попросите модератора выдать новый');
       }
-      const { userId, loginCode } = await auth.createCodeUser(q, { name, consentVersion: b.consentVersion });
+      const { userId, loginCode } = await auth.createCodeUser(q, { name, firstName: b.firstName, lastName: b.lastName, consentVersion: b.consentVersion });
       if (phone) await q.query('update users set contact_phone = $2 where id = $1', [userId, phone]);
       const joined = await joinStream(q, userId, b.streamCode);
       return { ...(await auth.issueFor(q, userId)), userId, loginCode, membership: joined.status };

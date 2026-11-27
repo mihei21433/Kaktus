@@ -121,7 +121,7 @@ function SearchResults({ overview, query }: { overview: Overview; query: string 
       {people?.map(({ row, stream }) => (
         <Pressable key={row.id} onPress={() => router.push({ pathname: '/mod/member/[id]', params: { id: row.id } })}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Avatar name={row.name} size={32} />
+            <Avatar name={row.name} size={32} uri={row.avatarUrl} />
             <View style={{ flex: 1 }}>
               <Text style={font.title}>{row.name}</Text>
               <Small style={{ fontSize: 12 }}>{stream}</Small>

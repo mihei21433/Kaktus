@@ -65,7 +65,7 @@ export default function StreamMembersScreen() {
       {list.map((m) => (
         <Pressable key={m.id} onPress={() => router.push({ pathname: '/mod/member/[id]', params: { id: m.id } })}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Avatar name={m.name} />
+            <Avatar name={m.name} uri={m.avatarUrl} />
             <View style={{ flex: 1, gap: 3 }}>
               <View style={[ui.row, { gap: 6 }]}>
                 <Text style={font.title} numberOfLines={1}>

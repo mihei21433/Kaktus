@@ -61,7 +61,7 @@ export default function DossierScreen() {
       {data ? (
         <>
           <View style={[ui.row, { gap: 12 }]}>
-            <Avatar name={data.member.name} size={44} />
+            <Avatar name={data.member.name} size={44} uri={data.member.avatarUrl} />
             <View style={{ flex: 1, gap: 2 }}>
               <View style={[ui.row, { gap: 6 }]}>
                 <Text style={font.h2} numberOfLines={1}>

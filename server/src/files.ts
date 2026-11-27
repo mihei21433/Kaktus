@@ -96,6 +96,15 @@ export class FileStore {
     return rel;
   }
 
+  /** Фото профиля: имя файла случайное и длинное — ссылку нельзя угадать; при смене фото меняется. */
+  async saveAvatar(data: Buffer): Promise<string> {
+    const rel = path.join('avatars', `${randomBytes(16).toString('hex')}.jpg`);
+    const abs = this.abs(rel);
+    await mkdir(path.dirname(abs), { recursive: true });
+    await writeFile(abs, data);
+    return rel;
+  }
+
   async remove(rel: string | null | undefined) {
     if (rel) await rm(this.abs(rel), { force: true });
   }

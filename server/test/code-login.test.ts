@@ -2,6 +2,12 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import sharp from 'sharp';
+
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { Db, migrate, openDb } from '../src/db/index.js';
@@ -17,7 +23,7 @@ before(async () => {
   db = await openDb({ url });
   if (url) await db.query('drop schema public cascade; create schema public');
   await migrate(db);
-  app = await buildApp(db, loadConfig({ NODE_ENV: 'test', DEV_RETURN_CODES: 'true' }), {
+  app = await buildApp(db, loadConfig({ NODE_ENV: 'test', DEV_RETURN_CODES: 'true', UPLOAD_DIR: mkdtempSync(path.join(tmpdir(), 'kaktus-avatars-')) }), {
     logger: false,
     messenger: { sendSms: async () => {}, sendEmail: async () => {} },
     push: { notifyUser: async () => {} },
@@ -184,5 +190,60 @@ describe('Регистрация: имя, фамилия, телефон, сво
     assert.equal(st2.body.profile.contract, 'Каждый день гуляю час и ложусь до 23:00');
     assert.ok(st2.body.profile.contractAcceptedAt);
     assert.equal(st2.body.profile.phone, '+77070000001');
+  });
+});
+
+describe('Аккаунт: имя, фамилия, телефон, фото', () => {
+  it('участник и модератор меняют данные; фото видно модератору; удаление фото', async () => {
+    const owner = await login('+77092000000');
+    await db.query('update users set is_moderator = true where id = $1', [owner.userId]);
+    const code = (await call('POST', '/v1/mod/streams', owner.accessToken, { name: 'Зима', requireApproval: false })).body.code;
+    const r = await call('POST', '/v1/auth/join', undefined, { streamCode: code, firstName: 'Анна', lastName: 'Смирнова', phone: '87073330000', consentVersion: 'v1' });
+    const t = r.body.accessToken;
+    let st = await call('GET', '/v1/me/state', t);
+    assert.deepEqual([st.body.profile.firstName, st.body.profile.lastName, st.body.profile.avatarUrl], ['Анна', 'Смирнова', null]);
+
+    assert.equal((await call('PUT', '/v1/me/account', t, { firstName: ' ', lastName: 'X' })).body.error, 'no_name');
+    assert.equal((await call('PUT', '/v1/me/account', t, { firstName: 'Анна-Мария', lastName: 'Иванова', phone: '+7 707 444 00 00' })).status, 200);
+    st = await call('GET', '/v1/me/state', t);
+    assert.equal(st.body.profile.name, 'Анна-Мария Иванова');
+    assert.equal(st.body.profile.phone, '+77074440000');
+
+    // фото: любая картинка → квадрат 512×512 JPEG по ссылке, которую нельзя подобрать
+    const png = await sharp({ create: { width: 900, height: 600, channels: 3, background: '#4FC879' } }).png().toBuffer();
+    const up = await app.inject({ method: 'POST', url: '/v1/me/avatar', headers: { authorization: `Bearer ${t}`, 'content-type': 'image/png' }, payload: png });
+    assert.equal(up.statusCode, 200, up.body);
+    const url = up.json().avatarUrl as string;
+    assert.match(url, /^\/v1\/files\/avatar\/[a-f0-9]{32}\.jpg$/);
+    const img = await app.inject({ method: 'GET', url });
+    assert.equal(img.statusCode, 200);
+    assert.equal(img.headers['content-type'], 'image/jpeg');
+    const meta = await sharp(img.rawPayload).metadata();
+    assert.deepEqual([meta.width, meta.height], [512, 512]);
+    assert.equal((await app.inject({ method: 'GET', url: '/v1/files/avatar/../../etc/passwd' })).statusCode, 404);
+
+    const [m] = await db.query<{ id: string }>('select id from memberships where user_id = $1', [r.body.userId]);
+    const list = await call('GET', `/v1/mod/streams/${(await db.query<{ id: string }>('select stream_id as id from memberships where id = $1', [m.id]))[0].id}/members`, owner.accessToken);
+    assert.equal(list.body[0].avatarUrl, url);
+    assert.equal(list.body[0].name, 'Анна-Мария Иванова');
+    const d = await call('GET', `/v1/mod/members/${m.id}`, owner.accessToken);
+    assert.equal(d.body.member.avatarUrl, url);
+    assert.equal(d.body.member.contact, '+77074440000');
+
+    // новое фото заменяет старое: прежняя ссылка больше не работает
+    const up2 = await app.inject({ method: 'POST', url: '/v1/me/avatar', headers: { authorization: `Bearer ${t}`, 'content-type': 'image/png' }, payload: png });
+    assert.notEqual(up2.json().avatarUrl, url);
+    assert.equal((await app.inject({ method: 'GET', url })).statusCode, 404);
+    assert.equal((await call('DELETE', '/v1/me/avatar', t)).status, 200);
+    assert.equal((await app.inject({ method: 'GET', url: up2.json().avatarUrl })).statusCode, 404);
+    assert.equal((await call('GET', '/v1/me/state', t)).body.profile.avatarUrl, null);
+
+    // модератор тоже редактирует свой аккаунт; его номер для входа по SMS не меняется
+    assert.equal((await call('PUT', '/v1/me/account', owner.accessToken, { firstName: 'Марина', lastName: 'Ковалёва', phone: '87015551111' })).status, 200);
+    const so = await call('GET', '/v1/me/state', owner.accessToken);
+    assert.equal(so.body.profile.name, 'Марина Ковалёва');
+    assert.equal(so.body.account.phone, '+77092000000');
+    const team = await call('GET', `/v1/mod/streams/${(await db.query<{ id: string }>('select id from streams where name = $1', ['Зима']))[0].id}/team`, owner.accessToken);
+    assert.equal(team.body.members[0].contact, '+77015551111');
   });
 });
