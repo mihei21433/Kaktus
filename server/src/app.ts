@@ -15,6 +15,7 @@ import { authRoutes } from './routes/auth.js';
 import { dataRoutes } from './routes/data.js';
 import { meRoutes } from './routes/me.js';
 import { moderatorRoutes } from './routes/moderator.js';
+import { streamConfigRoutes } from './routes/stream-config.js';
 
 export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; messenger?: Messenger; push?: Push } = {}) {
   const app = Fastify({
@@ -96,6 +97,7 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
         await dataRoutes(r, deps);
         await moderatorRoutes(r, deps);
         await analysesRoutes(r, deps);
+        await streamConfigRoutes(r, deps);
       });
     },
     { prefix: '/v1' },

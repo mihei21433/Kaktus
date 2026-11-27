@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { goalProgress, tasksForDate, useApp } from '@/data/store';
-import { Horizon, HORIZONS, InterimGoal } from '@/data/types';
+import { Horizon, InterimGoal, StreamHorizon, streamHorizons } from '@/data/types';
 import { addDays, diffDays, plural, todayKey } from '@/lib/date';
 import { Button, Caption, Card, Chip, LinkButton, ProgressBar, Screen, Segmented, Small, Tag, ui } from '@/ui';
 import { colors, font } from '@/theme';
@@ -87,19 +87,23 @@ function GoalList() {
   );
 }
 
-function daysLeft(i: InterimGoal): number {
-  const h = HORIZONS.find((x) => x.value === i.horizon)!;
-  return Math.max(0, diffDays(addDays(i.startDate, h.days), todayKey()));
+function daysLeft(i: InterimGoal, all: StreamHorizon[]): number {
+  const days = all.find((x) => x.id === i.horizon)?.days ?? 7;
+  return Math.max(0, diffDays(addDays(i.startDate, days), todayKey()));
 }
 
 function Overview() {
   const { state, actions } = useApp();
-  const [horizon, setHorizon] = useState<Horizon>('week');
+  const all = streamHorizons(state.membership.stream);
+  const enabled = all.filter((h) => h.enabled);
+  const [picked, setPicked] = useState<Horizon>('week');
+  // выбранный срок мог выключить модератор — тогда показываем первый включённый
+  const horizon = enabled.some((h) => h.id === picked) ? picked : (enabled[0]?.id ?? picked);
   const [open, setOpen] = useState<string | null>(null);
   const [delta, setDelta] = useState('');
   const filled = state.goals.filter((g) => g.result).length;
   const list = state.interim.filter((i) => i.horizon === horizon);
-  const hLabel = HORIZONS.find((h) => h.value === horizon)!.label;
+  const hLabel = all.find((h) => h.id === horizon)?.name ?? '';
 
   return (
     <>
@@ -123,16 +127,18 @@ function Overview() {
         </View>
       </Card>
 
+      {enabled.length ? (
+        <>
       <Caption>Задачи внутри целей · {hLabel}</Caption>
-      <View style={ui.row}>
-        {HORIZONS.map((h) => (
-          <Chip key={h.value} label={h.label} selected={horizon === h.value} color={colors.text} onPress={() => setHorizon(h.value)} />
+      <View style={ui.wrap}>
+        {enabled.map((h) => (
+          <Chip key={h.id} label={h.name} selected={horizon === h.id} color={colors.text} onPress={() => setPicked(h.id)} />
         ))}
       </View>
       {list.length === 0 ? <Small style={{ fontSize: 12 }}>На срок «{hLabel}» целей пока нет</Small> : null}
       {list.map((i) => {
         const g = state.goals.find((x) => x.id === i.goalId);
-        const left = daysLeft(i);
+        const left = daysLeft(i, all);
         const expanded = open === i.id;
         return (
           <Card key={i.id} style={{ gap: 10 }} onPress={() => setOpen(expanded ? null : i.id)}>
@@ -188,6 +194,8 @@ function Overview() {
           <Text style={{ color: colors.green }}>+ </Text>Поставить цель на срок
         </Text>
       </Pressable>
+        </>
+      ) : null}
     </>
   );
 }

@@ -233,7 +233,7 @@ export async function dataRoutes(app: FastifyInstance, { db, files, auth, cfg }:
       z.object({
         id: zId,
         goalId: zId,
-        horizon: z.enum(['day', 'week', 'month', 'quarter']),
+        horizon: z.string().min(1).max(40),
         text: zText(200).min(1),
         target: z.number().positive().max(1e9).optional(),
         unit: zText(20).optional(),
@@ -241,6 +241,8 @@ export async function dataRoutes(app: FastifyInstance, { db, files, auth, cfg }:
       req.body,
     );
     const { membership, stream } = await requireMember(db, req.userId);
+    const horizons = (stream.horizons as { id: string; enabled: boolean }[]) ?? [];
+    if (!horizons.some((h) => h.id === b.horizon && h.enabled)) throw badRequest('bad_horizon', 'Этот срок выключен модератором');
     await ownGoal(db, membership.id, b.goalId);
     await db.query(
       `insert into interim_goals (id, membership_id, goal_id, horizon, text, target, unit, start_date)

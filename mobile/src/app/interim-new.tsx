@@ -3,13 +3,16 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { useApp } from '@/data/store';
-import { Horizon, HORIZONS } from '@/data/types';
+import { Horizon, streamHorizons } from '@/data/types';
 import { Button, Caption, Chip, Field, Header, Screen, Small, ui } from '@/ui';
 
 export default function NewInterimScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams<{ horizon?: Horizon }>();
-  const [horizon, setHorizon] = useState<Horizon>(params.horizon ?? 'week');
+  const enabled = streamHorizons(state.membership.stream).filter((h) => h.enabled);
+  const [horizon, setHorizon] = useState<Horizon>(
+    enabled.some((h) => h.id === params.horizon) ? params.horizon! : (enabled.find((h) => h.id === 'week') ?? enabled[0])?.id ?? 'week',
+  );
   const [goalId, setGoalId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [target, setTarget] = useState('');
@@ -21,7 +24,7 @@ export default function NewInterimScreen() {
       footer={
         <Button
           title="Поставить цель"
-          disabled={!goalId || !text.trim()}
+          disabled={!goalId || !text.trim() || !enabled.some((h) => h.id === horizon)}
           onPress={() => {
             actions.addInterim({
               goalId: goalId!,
@@ -36,8 +39,8 @@ export default function NewInterimScreen() {
       }>
       <Caption>Срок</Caption>
       <View style={ui.wrap}>
-        {HORIZONS.map((h) => (
-          <Chip key={h.value} label={h.label} selected={horizon === h.value} onPress={() => setHorizon(h.value)} />
+        {enabled.map((h) => (
+          <Chip key={h.id} label={h.name} selected={horizon === h.id} onPress={() => setHorizon(h.id)} />
         ))}
       </View>
       <Caption>Цель</Caption>

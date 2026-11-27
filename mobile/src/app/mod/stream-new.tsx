@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { TEMPLATE_INCLUDES, TemplateInfo } from '@/components/stream-template';
 import { api, ApiError } from '@/data/api';
+import { useQuery } from '@/data/mod';
 import { Stream } from '@/data/types';
 import { useApp } from '@/data/store';
 import { Button, Caption, Card, Field, Header, Screen, Small, Toggle, ui } from '@/ui';
@@ -14,6 +16,7 @@ export default function StreamNewScreen() {
   const [approval, setApproval] = useState(true);
   const [days, setDays] = useState('90');
   const [busy, setBusy] = useState(false);
+  const tpl = useQuery<TemplateInfo>('/v1/mod/template').data?.template;
 
   const create = async () => {
     setBusy(true);
@@ -54,6 +57,14 @@ export default function StreamNewScreen() {
         />
         <Small style={{ fontSize: 12 }}>Отсчёт — с сегодняшнего дня. От длительности зависит срок глобальных целей.</Small>
       </Card>
+      {tpl ? (
+        <Card borderColor="#1E3A5F" style={{ gap: 4 }}>
+          <Text style={{ color: colors.text, fontSize: 15 }}>Настройки — из вашего шаблона</Text>
+          <Small style={{ fontSize: 12 }}>
+            Шаблон сохранён из «{tpl.sourceStream}». {TEMPLATE_INCLUDES}
+          </Small>
+        </Card>
+      ) : null}
     </Screen>
   );
 }

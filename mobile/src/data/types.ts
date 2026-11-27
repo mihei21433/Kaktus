@@ -1,11 +1,18 @@
-export type Horizon = 'day' | 'week' | 'month' | 'quarter';
+/** Срок цели: базовый (day, week, month, quarter) или свой срок потока (h_…). */
+export type Horizon = string;
+export type StreamHorizon = { id: string; name: string; days: number; base?: boolean; enabled: boolean };
 
-export const HORIZONS: { value: Horizon; label: string; days: number }[] = [
-  { value: 'day', label: 'День', days: 1 },
-  { value: 'week', label: 'Неделя', days: 7 },
-  { value: 'month', label: '1 месяц', days: 30 },
-  { value: 'quarter', label: '3 месяца', days: 90 },
+export const DEFAULT_HORIZONS: StreamHorizon[] = [
+  { id: 'day', name: 'День', days: 1, base: true, enabled: true },
+  { id: 'week', name: 'Неделя', days: 7, base: true, enabled: true },
+  { id: 'month', name: '1 месяц', days: 30, base: true, enabled: true },
+  { id: 'quarter', name: '3 месяца', days: 90, base: true, enabled: true },
 ];
+
+/** Сроки потока; у старых данных без настроек — базовые. */
+export function streamHorizons(s?: { horizons?: StreamHorizon[] } | null): StreamHorizon[] {
+  return s?.horizons?.length ? s.horizons : DEFAULT_HORIZONS;
+}
 
 export type Reminders = { enabled?: boolean; morning: string; evening: string };
 
@@ -21,6 +28,7 @@ export type Stream = {
   goalDeadline: string;
   stepsThreshold: number;
   norms: FitnessNorm[];
+  horizons?: StreamHorizon[];
   /** Разделы, включённые модератором */
   modules: { statements: boolean; steps: boolean; analyses: boolean; goals: boolean; ai: boolean };
   reminders?: Reminders;

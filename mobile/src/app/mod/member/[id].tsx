@@ -9,7 +9,7 @@ import { type Analyses, errorText, latestWithValues, openBlank } from '@/data/an
 import { api, ApiError } from '@/data/api';
 import { DayView, Dossier, useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
-import { HORIZONS } from '@/data/types';
+import { streamHorizons } from '@/data/types';
 import { mmss } from '@/lib/audio';
 import { formatDayMonth, formatNumber, formatTime, plural } from '@/lib/date';
 import { Button, Caption, Card, Chip, ConfirmDialog, Header, Ionicons, ProgressBar, Screen, Small, Stat, Tag, ui } from '@/ui';
@@ -119,7 +119,7 @@ function OverviewTab({ d }: { d: Dossier }) {
             <View key={i.id} style={{ gap: 4 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
                 <Text style={{ color: colors.text, fontSize: 13, flex: 1 }}>
-                  {HORIZONS.find((h) => h.value === i.horizon)?.label} · {i.text}
+                  {streamHorizons(d.stream).find((h) => h.id === i.horizon)?.name ?? 'Срок'} · {i.text}
                 </Text>
                 <Small style={{ fontSize: 12 }}>{i.target ? `${Math.round((i.progress / i.target) * 100)} %` : i.progress}</Small>
               </View>
@@ -239,11 +239,16 @@ function GoalsTab({ d }: { d: Dossier }) {
       </Card>
       <Card style={{ gap: 10 }}>
         <Caption>Задачи и цели по срокам</Caption>
-        {HORIZONS.map((h) => {
-          const list = d.interim.filter((i) => i.horizon === h.value);
+        {streamHorizons(d.stream)
+          .filter((h) => h.enabled || d.interim.some((i) => i.horizon === h.id))
+          .map((h) => {
+          const list = d.interim.filter((i) => i.horizon === h.id);
           return (
-            <View key={h.value} style={{ gap: 4 }}>
-              <Small style={{ fontSize: 11 }}>{h.label.toUpperCase()}</Small>
+            <View key={h.id} style={{ gap: 4 }}>
+              <Small style={{ fontSize: 11 }}>
+                {h.name.toUpperCase()}
+                {h.enabled ? '' : ' · выключен'}
+              </Small>
               {list.length === 0 ? <Small style={{ fontSize: 12 }}>Целей на этот срок пока нет</Small> : null}
               {list.map((i) => (
                 <View key={i.id} style={{ gap: 4 }}>

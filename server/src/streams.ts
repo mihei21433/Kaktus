@@ -2,6 +2,7 @@
 import type { Queryable } from './db/index.js';
 import { streamCode } from './lib/crypto.js';
 import { addDays } from './lib/time.js';
+import { applySettings, templateOf } from './templates.js';
 
 const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
@@ -55,6 +56,9 @@ export async function createStream(
           i,
         ]);
       }
+      // Новый поток получает шаблон владельца, если он его сохранял
+      const t = await templateOf(q, opts.ownerId);
+      if (t) await applySettings(q, s.id, t.settings);
       return s;
     } catch (e) {
       // совпал код с существующим — пробуем другой
@@ -79,12 +83,13 @@ export type StreamRow = {
   reminders: unknown;
   target_index: number;
   indicator_norms: unknown;
+  horizons: unknown;
   moderator: string;
 };
 
 export const STREAM_SELECT = `
   select s.id, s.name, s.code, s.timezone, s.start_date::text as start_date, s.duration_days, s.goal_deadline,
-         s.steps_threshold, s.require_approval, s.modules, s.norms, s.reminders, s.target_index, s.indicator_norms, coalesce(nullif(u.name, ''), 'Модератор') as moderator
+         s.steps_threshold, s.require_approval, s.modules, s.norms, s.reminders, s.target_index, s.indicator_norms, s.horizons, coalesce(nullif(u.name, ''), 'Модератор') as moderator
   from streams s join users u on u.id = s.owner_id`;
 
 /** Поток в формате мобильного приложения (тип Stream). */
@@ -102,6 +107,7 @@ export function streamView(s: StreamRow) {
     modules: s.modules,
     reminders: s.reminders,
     targetIndex: s.target_index,
+    horizons: s.horizons,
   };
 }
 

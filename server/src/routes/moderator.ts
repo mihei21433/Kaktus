@@ -246,7 +246,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
         blocked: m.status === 'blocked',
         status: m.status,
       },
-      stream: { id: s.id, name: s.name, stepsThreshold: s.steps_threshold, modules: s.modules },
+      stream: { id: s.id, name: s.name, stepsThreshold: s.steps_threshold, modules: s.modules, horizons: s.horizons },
       stats: { ...st, days: undefined },
       days: st.days,
       goals: goals.map((g) => ({

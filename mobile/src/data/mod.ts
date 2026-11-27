@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { api, ApiError } from './api';
-import { Stream } from './types';
+import { Stream, StreamHorizon } from './types';
 
 export type MemberLabel = 'new' | 'on_plan' | 'behind' | 'no_reports';
 
@@ -50,7 +50,7 @@ export type DayView = {
 
 export type Dossier = {
   member: { id: string; name: string; contact: string | null; about: string; contract: string; blocked: boolean; status: string };
-  stream: { id: string; name: string; stepsThreshold: number; modules: Stream['modules'] };
+  stream: { id: string; name: string; stepsThreshold: number; modules: Stream['modules']; horizons?: StreamHorizon[] };
   stats: {
     label: MemberLabel;
     dayInStream: number;

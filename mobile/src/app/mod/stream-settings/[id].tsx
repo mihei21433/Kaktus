@@ -6,10 +6,11 @@ import { Share, Text, TextInput, View } from 'react-native';
 import { FitnessNormsCard } from '@/components/fitness-norms';
 import { LoadState } from '@/components/mod-ui';
 import { TeamCard } from '@/components/stream-team';
+import { TemplateCard } from '@/components/stream-template';
 import { api, ApiError } from '@/data/api';
 import { StreamRole, useQuery } from '@/data/mod';
 import { useApp } from '@/data/store';
-import { Stream } from '@/data/types';
+import { Stream, streamHorizons } from '@/data/types';
 import { Button, Caption, Card, Chip, ConfirmDialog, Header, RowLink, Screen, Small, Toggle, ui } from '@/ui';
 import { addDays, formatDayMonth, plural, todayKey } from '@/lib/date';
 import { colors, font } from '@/theme';
@@ -20,7 +21,7 @@ type ModuleKey = keyof Stream['modules'];
 const MODULES: { key: ModuleKey; title: string; sub: string }[] = [
   { key: 'statements', title: 'Утренние заявления', sub: 'текстом · ежедневно' },
   { key: 'steps', title: 'Шаги и физнормативы', sub: 'порог и нормативы потока' },
-  { key: 'goals', title: 'Цели по срокам', sub: 'день, неделя, 1 и 3 месяца' },
+  { key: 'goals', title: 'Цели по срокам', sub: 'промежуточные цели · сроки ниже' },
   { key: 'analyses', title: 'Анализы и индекс здоровья', sub: 'замеры, нормы, индекс' },
 ];
 
@@ -124,6 +125,18 @@ export default function StreamSettingsScreen() {
             </Small>
           </Card>
 
+          <Caption>Цели</Caption>
+          <Card style={{ paddingVertical: 0 }}>
+            <RowLink
+              title="Сроки целей"
+              subtitle={(() => {
+                const h = streamHorizons(data);
+                return `включено ${h.filter((x) => x.enabled).length} из ${h.length}: ${h.filter((x) => x.enabled).map((x) => x.name).join(', ') || 'нет'}`;
+              })()}
+              onPress={() => router.push({ pathname: '/mod/horizons/[id]', params: { id } })}
+            />
+          </Card>
+
           <Caption>Физнормативы</Caption>
           <FitnessNormsCard streamId={id} norms={data.norms} onSaved={reload} />
 
@@ -166,6 +179,8 @@ export default function StreamSettingsScreen() {
           <Card borderColor="#5A4520" background={colors.orangeDim}>
             <Small color={colors.text}>Выключенный модуль исчезает у участников. Данные сохраняются.</Small>
           </Card>
+          <Caption>Шаблон</Caption>
+          <TemplateCard streamId={id} streamName={data.name} onApplied={reload} />
           </>
           )}
 

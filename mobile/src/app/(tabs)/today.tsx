@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { TaskRow } from '@/components/task-row';
 import { goalProgress, tasksForDate, useApp } from '@/data/store';
-import { HORIZONS } from '@/data/types';
+import { streamHorizons } from '@/data/types';
 import { diffDays, formatDayMonth, formatNumber, formatTime, todayKey } from '@/lib/date';
 import { Caption, Card, Ionicons, LinkButton, ProgressBar, Screen, Small, Stat } from '@/ui';
 import { colors, font } from '@/theme';
@@ -20,7 +20,8 @@ export default function TodayScreen() {
   const steps = state.steps[today];
 
   const mainGoal = state.goals[0];
-  const weekly = state.interim.find((i) => i.goalId === mainGoal?.id && i.horizon === 'week');
+  const weekOn = streamHorizons(stream).some((h) => h.id === 'week' && h.enabled);
+  const weekly = weekOn ? state.interim.find((i) => i.goalId === mainGoal?.id && i.horizon === 'week') : undefined;
 
   return (
     <Screen inTabs>
@@ -111,7 +112,7 @@ export default function TodayScreen() {
             {weekly ? (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Small style={{ fontSize: 12 }}>
-                  {HORIZONS.find((h) => h.value === weekly.horizon)?.label}: {weekly.text}
+                  {streamHorizons(stream).find((h) => h.id === weekly.horizon)?.name}: {weekly.text}
                 </Small>
                 <Small style={{ fontSize: 12 }} color={colors.green}>
                   {weekly.progress}/{weekly.target}
