@@ -1,0 +1,25 @@
+# Проверка снаружи: DNS, HTTPS и версии сервера и веб-версии. Запуск: Actions → «Проверка сайта» → Run workflow.
+name: Проверка сайта
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: DNS
+        run: |
+          for h in api.vectorfamily.kz app.vectorfamily.kz; do
+            echo "$h → $(dig +short A $h @8.8.8.8 | tr '\n' ' ')"
+          done
+      - name: Сервер
+        run: curl -sS -m 15 https://api.vectorfamily.kz/health || true
+      - name: Веб-версия
+        run: |
+          echo "version.txt: $(curl -sS -m 15 https://app.vectorfamily.kz/version.txt 2>&1)"
+          curl -sS -m 15 -o /dev/null -w "главная: HTTP %{http_code}, %{size_download} байт\n" https://app.vectorfamily.kz/ 2>&1 || true
+          curl -sS -m 15 -o /dev/null -w "манифест: HTTP %{http_code}\n" https://app.vectorfamily.kz/manifest.webmanifest 2>&1 || true
+          curl -sS -m 15 -o /dev/null -w "страница /today: HTTP %{http_code}\n" https://app.vectorfamily.kz/today 2>&1 || true
+          echo "ветка production-web: $(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/production-web | cut -c1-40)"
