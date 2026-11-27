@@ -5,8 +5,7 @@ import { useApp } from '@/data/store';
 import { Button, Caption, Card, Checkbox, Field, Ionicons, Screen, Small } from '@/ui';
 import { colors, font } from '@/theme';
 
-const DEFAULT_CONTRACT =
-  '«Я обязуюсь ежедневно закрывать задачи дня, проходить не менее 10 000 шагов в день и присылать утреннее заявление.»';
+const CONTRACT_MIN = 10;
 
 export function ProfileForm({
   header,
@@ -22,33 +21,35 @@ export function ProfileForm({
   const { state, actions } = useApp();
   const p = state.profile;
   const [name, setName] = useState(p.name);
+  const [phone, setPhone] = useState(p.phone ?? '');
   const [about, setAbout] = useState(p.about);
-  const [contract, setContract] = useState(p.contract || DEFAULT_CONTRACT);
+  const [contract, setContract] = useState(p.contract);
   const [accepted, setAccepted] = useState(!!p.contractAcceptedAt);
   const locked = !!p.contractAcceptedAt;
-  const canSubmit = !requireAccept || accepted;
+  const contractOk = locked || contract.trim().length >= CONTRACT_MIN;
+  const canSubmit = !!name.trim() && (!requireAccept || (accepted && contractOk));
 
   return (
     <Screen
       header={header}
       footer={
         <>
-          {requireAccept && !accepted ? (
+          {requireAccept && !canSubmit ? (
             <Small style={{ textAlign: 'center', fontSize: 12 }}>
-              Отметьте «Принимаю обязательства» — или нажмите «Позже»
+              {!contractOk ? 'Напишите свой личный контракт' : 'Отметьте «Принимаю обязательства»'}
             </Small>
           ) : null}
           <Button
             title={submitLabel}
             disabled={!canSubmit}
             onPress={() => {
-              actions.saveProfile({ name: name.trim() || p.name, about, contract, accepted });
+              actions.saveProfile({ name: name.trim() || p.name, phone: phone.trim() || undefined, about, contract: contract.trim(), accepted });
               onDone();
             }}
           />
         </>
       }>
-      <Small>Модератор увидит это. Можно заполнить позже.</Small>
+      <Small>Модератор увидит это.</Small>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
         <View
           style={{
@@ -67,22 +68,38 @@ export function ProfileForm({
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Ваше имя"
+            placeholder="Имя и фамилия"
             placeholderTextColor={colors.textMuted}
             style={[font.title, { padding: 0 }]}
           />
           <Text style={{ color: colors.blue, fontSize: 13 }}>Фото профиля — скоро</Text>
         </View>
       </View>
+      <Field
+        label="Телефон для связи"
+        value={phone}
+        onChangeText={(v) => setPhone(v.replace(/[^\d+\s()-]/g, '').slice(0, 20))}
+        placeholder="+7 777 123 45 67"
+        keyboardType="phone-pad"
+      />
       <Field label="О себе" value={about} onChangeText={setAbout} placeholder="Пара слов о себе и своей цели" multiline maxLength={300} />
       <Caption>Личный контракт</Caption>
+      {!locked ? (
+        <Small style={{ fontSize: 12 }}>
+          Своими словами: что вы обещаете себе на время потока. Например: «Каждый день прохожу 10 000 шагов, ложусь до 23:00 и не ем
+          сладкое после шести».
+        </Small>
+      ) : null}
       <Card style={{ gap: 12 }}>
         <TextInput
           value={contract}
           onChangeText={setContract}
           multiline
           editable={!locked}
-          style={{ color: colors.text, fontSize: 15, minHeight: 80, textAlignVertical: 'top', padding: 0 }}
+          maxLength={1000}
+          placeholder="Я обязуюсь…"
+          placeholderTextColor={colors.textMuted}
+          style={{ color: colors.text, fontSize: 15, minHeight: 100, textAlignVertical: 'top', padding: 0 }}
         />
         {locked ? (
           <Text style={{ color: colors.green, fontSize: 13 }}>✓ Обязательства приняты</Text>

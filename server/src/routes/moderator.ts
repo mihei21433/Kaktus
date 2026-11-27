@@ -89,7 +89,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     await requireStreamAccess(db, req.userId, id);
     return db.query(
       `select m.id, m.status, m.requested_at as "requestedAt", m.decided_at as "decidedAt",
-              u.name, u.phone, u.email
+              u.name, coalesce(u.phone, u.contact_phone) as phone, u.email
        from memberships m join users u on u.id = m.user_id
        where m.stream_id = $1 and ($2::text is null or m.status = $2)
        order by m.requested_at desc`,
@@ -123,7 +123,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
 
   async function streamMembers(streamId: string) {
     return db.query<{ id: string; status: string; decided_at: Date | null; requested_at: Date; name: string; phone: string | null; email: string | null }>(
-      `select m.id, m.status, m.decided_at, m.requested_at, u.name, u.phone, u.email
+      `select m.id, m.status, m.decided_at, m.requested_at, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email
        from memberships m join users u on u.id = m.user_id
        where m.stream_id = $1 and m.status in ('approved', 'blocked') order by u.name, m.requested_at`,
       [streamId],
@@ -158,7 +158,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     await requireModerator(db, req.userId);
     const { status } = parse(z.object({ status: z.enum(['pending', 'approved', 'rejected']).default('pending') }), req.query);
     const rows = await db.query<{ id: string; status: string; requested_at: Date; decided_at: Date | null; name: string; phone: string | null; email: string | null; stream_name: string; stream_code: string }>(
-      `select m.id, m.status, m.requested_at, m.decided_at, u.name, u.phone, u.email, s.name as stream_name, s.code as stream_code
+      `select m.id, m.status, m.requested_at, m.decided_at, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email, s.name as stream_name, s.code as stream_code
        from memberships m join users u on u.id = m.user_id join streams s on s.id = m.stream_id
        join stream_moderators sm on sm.stream_id = s.id and sm.user_id = $1
        where m.status = $2 order by coalesce(m.decided_at, m.requested_at) desc limit 200`,
@@ -224,7 +224,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
     // досье содержит шаги и физнормативы — данные о здоровье
     await logAccess(db, req.userId, m.id, 'dossier');
     const [u] = await db.query<{ name: string; phone: string | null; email: string | null; about: string; contract: string }>(
-      'select name, phone, email, about, contract from users where id = $1',
+      'select name, coalesce(phone, contact_phone) as phone, email, about, contract from users where id = $1',
       [m.user_id],
     );
     const st = (await memberStats(db, [m], s)).get(m.id)!;
@@ -436,7 +436,7 @@ export async function moderatorRoutes(app: FastifyInstance, { db, push, files, a
 
   async function team(streamId: string, me: string) {
     const rows = await db.query<{ user_id: string; role: 'owner' | 'moderator'; name: string; phone: string | null; email: string | null; added_at: Date }>(
-      `select sm.user_id, sm.role, u.name, u.phone, u.email, sm.added_at
+      `select sm.user_id, sm.role, u.name, coalesce(u.phone, u.contact_phone) as phone, u.email, sm.added_at
        from stream_moderators sm join users u on u.id = sm.user_id
        where sm.stream_id = $1 order by sm.role = 'owner' desc, sm.added_at`,
       [streamId],

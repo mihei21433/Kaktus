@@ -15,10 +15,14 @@ import { colors, font } from '@/theme';
 export default function JoinScreen() {
   const { actions, loggedIn } = useApp();
   const [code, setCode] = useState('');
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const digits = phone.replace(/\D/g, '');
+  const phoneOk = digits.length === 10 || (digits.length === 11 && /^[78]/.test(digits));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ready = code.length >= 6 && (loggedIn || name.trim().length > 0);
+  const ready = code.length >= 6 && (loggedIn || (!!firstName.trim() && !!lastName.trim() && phoneOk));
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -30,7 +34,7 @@ export default function JoinScreen() {
         if (res.ok) router.replace('/');
         else setError(res.error);
       } else {
-        setFreshCode(await actions.joinWithStreamCode(code, name.trim()));
+        setFreshCode(await actions.joinWithStreamCode(code, { firstName: firstName.trim(), lastName: lastName.trim(), phone }));
         if (router.canDismiss()) router.dismissAll();
         router.replace({ pathname: '/my-code', params: { fresh: '1' } });
       }
@@ -54,17 +58,40 @@ export default function JoinScreen() {
         onSubmit={submit}
       />
       {!loggedIn ? (
-        <Field
-          label="Как вас зовут"
-          value={name}
-          onChangeText={(v) => {
-            setName(v.slice(0, 80));
-            setError(null);
-          }}
-          placeholder="Имя и фамилия"
-          autoComplete="name"
-          onSubmitEditing={submit}
-        />
+        <>
+          <Field
+            label="Имя"
+            value={firstName}
+            onChangeText={(v) => {
+              setFirstName(v.slice(0, 40));
+              setError(null);
+            }}
+            placeholder="Анна"
+            autoComplete="given-name"
+          />
+          <Field
+            label="Фамилия"
+            value={lastName}
+            onChangeText={(v) => {
+              setLastName(v.slice(0, 40));
+              setError(null);
+            }}
+            placeholder="Смирнова"
+            autoComplete="family-name"
+          />
+          <Field
+            label="Телефон"
+            value={phone}
+            onChangeText={(v) => {
+              setPhone(v.replace(/[^\d+\s()-]/g, '').slice(0, 20));
+              setError(null);
+            }}
+            placeholder="+7 777 123 45 67"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            onSubmitEditing={submit}
+          />
+        </>
       ) : null}
       {error ? (
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
@@ -82,7 +109,10 @@ export default function JoinScreen() {
       <Button title={busy ? 'Проверяем…' : 'Вступить'} disabled={!ready || busy} onPress={submit} />
       {!loggedIn ? (
         <>
-          <Small style={{ fontSize: 12 }}>Имя увидит модератор потока. Телефон и почта не нужны.</Small>
+          <Small style={{ fontSize: 12 }}>
+            Имя, фамилию и телефон увидит модератор потока — так он отличит вас от тёзок и сможет связаться. SMS не придёт: телефон
+            нужен только для связи.
+          </Small>
           <LinkButton title="Уже есть аккаунт — войти по личному коду" color={colors.blue} onPress={() => router.replace('/login')} />
         </>
       ) : null}

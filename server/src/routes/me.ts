@@ -4,7 +4,8 @@ import { z } from 'zod';
 import type { Deps } from '../context.js';
 import type { Queryable } from '../db/index.js';
 import { normalizeCode } from '../lib/crypto.js';
-import { ApiError, conflict, notFound } from '../lib/errors.js';
+import { ApiError, badRequest, conflict, notFound } from '../lib/errors.js';
+import { normalizePhone } from '../lib/identity.js';
 import { parse, zText } from '../lib/validate.js';
 import { buildAnalyses, shortSummary } from '../analyses/service.js';
 import { currentMembership, loadStream } from '../membership.js';
@@ -26,6 +27,7 @@ type UserRow = {
   ai_transfer: boolean;
   is_moderator: boolean;
   login_code_set_at: Date | null;
+  contact_phone: string | null;
 };
 
 /** Полное состояние участника в формате мобильного приложения (AppState). */
@@ -44,6 +46,7 @@ export async function buildState(q: Queryable, userId: string) {
       : { status: 'none', checks: 0 },
     profile: {
       name: u.name,
+      phone: u.contact_phone ?? u.phone ?? '',
       about: u.about,
       contract: u.contract,
       contractAcceptedAt: u.contract_accepted_at ?? undefined,
@@ -143,9 +146,11 @@ export async function meRoutes(app: FastifyInstance, { db, files, auth }: Deps) 
   /* --- Профиль --- */
   app.put('/me/profile', async (req) => {
     const b = parse(
-      z.object({ name: zText(60).optional(), about: zText(300), contract: zText(1000), accepted: z.boolean() }),
+      z.object({ name: zText(80).optional(), phone: z.string().max(30).optional(), about: zText(300), contract: zText(1000), accepted: z.boolean() }),
       req.body,
     );
+    if (b.accepted && b.contract.trim().length < 3) throw badRequest('no_contract', 'Напишите личный контракт своими словами');
+    if (b.phone?.trim()) await db.query('update users set contact_phone = $2 where id = $1', [req.userId, normalizePhone(b.phone)]);
     await db.query(
       `update users set
          name = coalesce(nullif($2, ''), name), about = $3,

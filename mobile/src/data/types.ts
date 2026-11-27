@@ -47,6 +47,8 @@ export type Consent = { version: string; acceptedAt: string; aiTransfer: boolean
 
 export type Profile = {
   name: string;
+  /** Телефон для связи (указан при регистрации, без подтверждения) */
+  phone?: string;
   about: string;
   contract: string;
   contractAcceptedAt?: string;

@@ -146,3 +146,43 @@ describe('Вход по кодам', () => {
     assert.ok(req.body.some((x: J) => x.name === 'Борис' && x.streamName === 'Лето'));
   });
 });
+
+describe('Регистрация: имя, фамилия, телефон, свой контракт', () => {
+  let code: string;
+  let owner: { accessToken: string; userId: string };
+  before(async () => {
+    owner = await login('+77091000000');
+    await db.query('update users set is_moderator = true where id = $1', [owner.userId]);
+    code = (await call('POST', '/v1/mod/streams', owner.accessToken, { name: 'Осень', requireApproval: false })).body.code;
+  });
+
+  it('фамилия и телефон обязательны; телефон виден модератору', async () => {
+    const base = { streamCode: code, consentVersion: 'v1' };
+    assert.equal((await call('POST', '/v1/auth/join', undefined, { ...base, firstName: 'Анна', lastName: '', phone: '87071234567' })).body.error, 'no_name');
+    assert.equal((await call('POST', '/v1/auth/join', undefined, { ...base, firstName: 'Анна', lastName: 'Смирнова' })).body.error, 'no_phone');
+    assert.equal((await call('POST', '/v1/auth/join', undefined, { ...base, firstName: 'Анна', lastName: 'Смирнова', phone: '123' })).body.error, 'bad_phone');
+    const r = await call('POST', '/v1/auth/join', undefined, { ...base, firstName: ' Анна ', lastName: 'Смирнова', phone: '8 707 123 45 67' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const st = await call('GET', '/v1/me/state', r.body.accessToken);
+    assert.equal(st.body.profile.name, 'Анна Смирнова');
+    assert.equal(st.body.profile.phone, '+77071234567');
+    assert.equal(st.body.account.phone, null); // по этому номеру нельзя войти через SMS — он не подтверждён
+
+    const [m] = await db.query<{ id: string }>('select id from memberships where user_id = $1', [r.body.userId]);
+    const d = await call('GET', `/v1/mod/members/${m.id}`, owner.accessToken);
+    assert.equal(d.body.member.contact, '+77071234567');
+
+    // тот же номер в том же потоке — вторая регистрация не проходит
+    const dup = await call('POST', '/v1/auth/join', undefined, { ...base, firstName: 'Анна', lastName: 'Смирнова', phone: '+7 707 123-45-67' });
+    assert.equal(dup.body.error, 'phone_taken');
+
+    // контракт пишется своими словами: пустой принять нельзя
+    assert.equal((await call('PUT', '/v1/me/profile', r.body.accessToken, { about: '', contract: '  ', accepted: true })).body.error, 'no_contract');
+    const ok = await call('PUT', '/v1/me/profile', r.body.accessToken, { about: '', contract: 'Каждый день гуляю час и ложусь до 23:00', accepted: true, phone: '87070000001' });
+    assert.equal(ok.status, 200);
+    const st2 = await call('GET', '/v1/me/state', r.body.accessToken);
+    assert.equal(st2.body.profile.contract, 'Каждый день гуляю час и ложусь до 23:00');
+    assert.ok(st2.body.profile.contractAcceptedAt);
+    assert.equal(st2.body.profile.phone, '+77070000001');
+  });
+});

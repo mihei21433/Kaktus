@@ -144,8 +144,8 @@ export async function upload<T = unknown>(path: string, body: Blob, contentType:
 /* --- Вход --- */
 
 /** Новый участник без SMS: код потока + имя. Возвращает личный код входа — показать один раз. */
-export async function joinWithStreamCode(streamCode: string, name: string, consentVersion: string) {
-  const t = await raw('POST', '/v1/auth/join', { streamCode, name, consentVersion });
+export async function joinWithStreamCode(streamCode: string, who: { firstName: string; lastName: string; phone: string }, consentVersion: string) {
+  const t = await raw('POST', '/v1/auth/join', { streamCode, ...who, consentVersion });
   setSession({ accessToken: t.accessToken, refreshToken: t.refreshToken });
   return t as { loginCode: string; membership: string };
 }

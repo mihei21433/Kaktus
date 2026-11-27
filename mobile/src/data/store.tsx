@@ -67,8 +67,8 @@ function useActions({ setState, get, setError, setLoggedIn }: Env) {
 
       /* --- Вход --- */
       /** Вступление без SMS: аккаунт, заявка в поток и личный код входа. */
-      async joinWithStreamCode(code: string, name: string) {
-        const r = await api.joinWithStreamCode(code, name, get().consent?.version ?? CONSENT_VERSION);
+      async joinWithStreamCode(code: string, who: { firstName: string; lastName: string; phone: string }) {
+        const r = await api.joinWithStreamCode(code, who, get().consent?.version ?? CONSENT_VERSION);
         setLoggedIn(true);
         await refresh();
         return r.loginCode;
@@ -164,11 +164,12 @@ function useActions({ setState, get, setError, setLoggedIn }: Env) {
       },
 
       /* --- Профиль --- */
-      saveProfile(p: { name?: string; about: string; contract: string; accepted: boolean }) {
+      saveProfile(p: { name?: string; phone?: string; about: string; contract: string; accepted: boolean }) {
         setState((s) => ({
           ...s,
           profile: {
             name: p.name ?? s.profile.name,
+            phone: p.phone ?? s.profile.phone,
             about: p.about,
             contract: s.profile.contractAcceptedAt ? s.profile.contract : p.contract,
             contractAcceptedAt: p.accepted ? s.profile.contractAcceptedAt ?? new Date().toISOString() : s.profile.contractAcceptedAt,
