@@ -1,0 +1,116 @@
+# Выкатка: каждое изменение в main проходит автотесты, затем само попадает на сервер
+# (ветка production, её забирает deploy/auto-update.sh), затем — обновление приложения по воздуху.
+name: Выкатка
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app_update:
+        description: Опубликовать обновление приложения по воздуху
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Автотесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            mobile/package-lock.json
+      - name: Сервер — типы и тесты
+        working-directory: server
+        run: |
+          npm ci
+          npx tsc --noEmit -p .
+          npm test
+      - name: Приложение — типы и линтер
+        working-directory: mobile
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx eslint src
+
+  server:
+    name: Сервер
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Отдать проверенную версию серверу
+        run: git push --force origin HEAD:refs/heads/production
+      - name: Дождаться, пока сервер обновится
+        run: |
+          for i in $(seq 1 60); do
+            v=$(curl -s -m 10 https://api.vectorfamily.kz/health || true)
+            if echo "$v" | grep -q "$GITHUB_SHA"; then echo "Сервер обновлён: $v"; exit 0; fi
+            echo "ждём… сейчас: ${v:-нет ответа}"
+            sleep 20
+          done
+          echo "::error::Сервер не обновился за 20 минут. Включено ли автообновление (deploy/install-auto-update.sh)? Журнал на сервере: /var/log/kaktus-update.log"
+          exit 1
+
+  app:
+    name: Приложение по воздуху
+    needs: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Изменилось ли приложение
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo "yes=${{ inputs.app_update }}" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          set +e
+          git diff --quiet "${{ github.event.before }}" "$GITHUB_SHA" -- mobile
+          rc=$?
+          set -e
+          # 0 — без изменений, 1 — есть изменения, иначе (нет прошлого коммита) — публикуем
+          if [ $rc = 0 ]; then echo yes=false >> "$GITHUB_OUTPUT"; else echo yes=true >> "$GITHUB_OUTPUT"; fi
+      - name: Проверить секреты
+        if: steps.changed.outputs.yes == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          [ -n "$EXPO_TOKEN" ] || { echo "::error::Нет секрета EXPO_TOKEN (Settings → Secrets and variables → Actions)"; exit 1; }
+          [ -n "$GOOGLE_SERVICES_JSON" ] || { echo "::error::Нет секрета GOOGLE_SERVICES_JSON"; exit 1; }
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.yes == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Опубликовать обновление
+        if: steps.changed.outputs.yes == 'true'
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          EAS_NO_VCS: '1'
+          EAS_PROJECT_ROOT: ${{ github.workspace }}/mobile
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+          npm ci
+          npx eas-cli@latest update --channel preview --environment preview --non-interactive \
+            --message "$(git log -1 --format=%s)"

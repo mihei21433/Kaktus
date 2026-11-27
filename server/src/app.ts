@@ -63,7 +63,8 @@ export async function buildApp(db: Db, cfg: Config, opts: { logger?: boolean; me
     if (!u) throw new ApiError(401, 'unauthorized', 'Аккаунт не найден');
   };
 
-  app.get('/health', async () => ({ ok: true }));
+  // version — коммит, с которого собран сервер: по нему автовыкатка понимает, что сервер обновился
+  app.get('/health', async () => ({ ok: true, version: process.env.GIT_SHA || 'dev' }));
 
   app.get('/v1/files/blank/:token', async (req, reply) => {
     const { token } = req.params as { token: string };

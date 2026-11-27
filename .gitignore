@@ -5,3 +5,7 @@ dist/
 !.env.example
 *.log
 .DS_Store
+
+# автообновление сервера: какой коммит выкачен / не поднялся
+deploy/.deployed
+deploy/.failed
